@@ -1,0 +1,10 @@
+This is an implementation of the Botvinick and Plaut (2004) SRN model
+of routine action selection and its disorders. To explore the model's
+behaviour it first needs to be trained. Open the "Train" tab and train
+it for at least 5000 epochs (but ideally 20,000, as in the original
+work). Then explore the model's response to damage by, for example,
+switching to the "BP Analyses" tab and selecting one of those
+analyses. Each of these analyses takes the currently trained network
+and explores its behaviour according to one of the analyses from the
+original (i.e., 2004) publication, or with alternative forms of
+damage.
