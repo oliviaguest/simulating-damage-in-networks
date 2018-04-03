@@ -51,25 +51,25 @@ static void lesion_viewer_paint_to_cairo(cairo_t *cr, GraphStruct *gd, double w,
         case 0: { // Fig 3: Animals versus Artefacts / Distinctive
             g_snprintf(buffer, 128, "Effect of Damage on Distinctive Perceptual Features [%s; %d reps]", nt_name[nt], reps);
             graph_set_title(gd, buffer);
-            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.4, 11, "%4.2f", "Mean absolute error (per feature)");
+            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.5, 11, "%4.2f", "Mean absolute error (per feature)");
             break;
 	}
         case 1: { // Fig 4: Shared versus Distinctive / Perceptual
             g_snprintf(buffer, 128, "Effect of Damage on Features of Animals [%s; %d reps]", nt_name[nt], reps);
             graph_set_title(gd, buffer);
-            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.4, 11, "%4.2f", "Mean absolute error (per feature)");
+            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.5, 11, "%4.2f", "Mean absolute error (per feature)");
             break;
 	}
         case 2: { // Fig 5: Animal versus Artefacts / Shared
             g_snprintf(buffer, 128, "Effect of Damage on Shared Features [%s; %d reps]", nt_name[nt], reps);
             graph_set_title(gd, buffer);
-            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.4, 11, "%4.2f", "Mean absolute error / shared feature");
+            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.5, 11, "%4.2f", "Mean absolute error / shared feature");
             break;
 	}
         case 3: { // Fig 6: Animal versus Artefacts / Functional
             g_snprintf(buffer, 128, "Effect of Damage on Functional Features [%s; %d reps]", nt_name[nt], reps);
             graph_set_title(gd, buffer);
-            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.4, 11, "%4.2f", "Mean absolute error / functional feature");
+            graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 0, 0.5, 11, "%4.2f", "Mean absolute error / functional feature");
             break;
 	}
         case 4: { // Fig 7: Identity: Animals versus Artefacts
@@ -562,9 +562,9 @@ static void print_graph_callback(GtkWidget *button, XGlobals *xg)
     char *prefix1 = NULL;
     char *prefix2 = NULL;
 #ifdef CLAMPED
-    char *prefix3[3] = {"ffn", "srnc"};
+    char *prefix3[3] = {"ffn", "ranc"};
 #else
-    char *prefix3[3] = {"ffn", "srnu"};
+    char *prefix3[3] = {"ffn", "ranu"};
 #endif
     cairo_surface_t *surface = NULL;
     cairo_t *cr = NULL;
@@ -671,7 +671,7 @@ void lesion_viewer_create_widgets(GtkWidget *vbox, XGlobals *xg)
     gd = graph_create(4);
     graph_set_margins(gd, 72, 26, 30, 45);
 
-    if ((fp = font_properties_create("Sans", 22, PANGO_STYLE_NORMAL, PANGO_WEIGHT_NORMAL, "black")) != NULL) {
+    if ((fp = font_properties_create("Sans", 20, PANGO_STYLE_NORMAL, PANGO_WEIGHT_NORMAL, "black")) != NULL) {
         graph_set_title_font_properties(gd, fp);
         font_properties_set_size(fp, 18);
         graph_set_legend_font_properties(gd, fp);

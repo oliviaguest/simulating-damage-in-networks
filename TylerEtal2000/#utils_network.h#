@@ -31,6 +31,16 @@ typedef struct network {
 } Network;
 
 typedef struct network_parameters {
+
+
+
+
+
+
+
+
+
+
     NetworkType      nt;       // FF or Settling_RAN
     double           wn;       // Initial weight noise
     double           lr;       // Learning rate
@@ -43,8 +53,7 @@ typedef struct network_parameters {
 } NetworkParameters;
 
 // Compile for clamped or unclamped version of RAN:
-#define CLAMPED
-// FIXME: The above would be much better as a network parameter
+#undef CLAMPED
 
 /* Defined in utils_io.c: *****************************************************/
 

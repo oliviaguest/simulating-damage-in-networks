@@ -59,6 +59,7 @@ extern void network_tell_propagate2(Network *net);
 extern void network_ask_input(Network *net, double *vector);
 extern void network_ask_hidden(Network *net, double *vector);
 extern void network_ask_output(Network *net, double *vector);
+extern void network_perturb_weights_ih(Network *net, double variance);
 extern void network_perturb_weights_ch(Network *net, double variance);
 extern void network_inject_noise(Network *net, double sv_noise);
 extern void network_print_state(FILE *fp, Network *net, char *message);

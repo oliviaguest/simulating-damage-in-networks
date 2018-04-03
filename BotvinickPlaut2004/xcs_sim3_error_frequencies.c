@@ -22,10 +22,12 @@ typedef struct damage_details {
     char *format;
 } DamageDetails;
 
-static DamageDetails sc_dd[3] = {
+static DamageDetails sc_dd[5] = {
     {"Activation Noise (s.d.)",    10, { 0.00,  0.01,  0.02,  0.03,  0.04,  0.05,  0.10,  0.20,  0.30,  0.40,  0.00}, "%4.2f"},
-    {"Weight Noise (s.d.)",        10, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.250, 0.400,  0.00}, "%5.3f"},
-    {"Connections Severed (proportion)", 11, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.120, 0.200, 0.400}, "%5.3f"}
+    {"CH Weight Noise (s.d.)",        10, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.250, 0.400,  0.00}, "%5.3f"},
+    {"CH Connections Severed (proportion)", 11, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.120, 0.200, 0.400}, "%5.3f"},
+    {"IH Weight Noise (s.d.)",        10, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.250, 0.400,  0.00}, "%5.3f"},
+    {"IH Connections Severed (proportion)", 11, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.120, 0.200, 0.400}, "%5.3f"}
 };
 
 static char *category_names[ERROR_CATEGORIES] = {
@@ -93,7 +95,7 @@ static void sc_run_and_score_activation_noise(Network *net, TaskType *task, int 
     }
 }
 
-static void sc_run_and_score_weight_noise(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_noise(Network *net, TaskType *task, int i)
 {
     double *vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
     double *vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
@@ -140,7 +142,7 @@ static void sc_run_and_score_weight_noise(Network *net, TaskType *task, int i)
     }
 }
 
-static void sc_run_and_score_weight_lesion(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_lesion(Network *net, TaskType *task, int i)
 {
     double *vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
     double *vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
@@ -154,6 +156,100 @@ static void sc_run_and_score_weight_lesion(Network *net, TaskType *task, int i)
     network_tell_randomise_hidden_units(net);
     /* Just lesion the context to hidden connections: */
     network_lesion_weights_ch(net, sc_dd[2].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+        this[count] = world_get_network_output_action(NULL, vector_out);
+        world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &res1);
+    errors = analyse_actions_with_acs2(task, &res2);
+    analyse_actions_code_free_error_list(errors);
+
+    sc_data[i][0] += res2.omissions;
+    sc_data[i][1] += res2.anticipations;
+    sc_data[i][2] += res2.perseverations;
+    sc_data[i][3] += res2.reversals;
+    sc_data[i][4] += res2.object_sub;
+    sc_data[i][5] += res2.gesture_sub;
+    sc_data[i][6] += res2.tool_omission;
+    sc_data[i][7] += res2.action_addition;
+    sc_data[i][8] += res2.quality;
+    sc_data[i][9] += res2.bizarre;
+    if (res2.accomplished) {
+        sc_accomplishment[i] += 1;
+    }
+}
+
+static void sc_run_and_score_ih_weight_noise(Network *net, TaskType *task, int i)
+{
+    double *vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    double *vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+    ActionType this[MAX_STEPS];
+    ACS1        res1;
+    ACS2        res2;
+    int count = 0;
+    GList      *errors = NULL;
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Add noise to context to hidden connections: */
+    network_perturb_weights_ih(net, sc_dd[3].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+        this[count] = world_get_network_output_action(NULL, vector_out);
+        world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &res1);
+    errors = analyse_actions_with_acs2(task, &res2);
+    analyse_actions_code_free_error_list(errors);
+
+    sc_data[i][0] += res2.omissions;
+    sc_data[i][1] += res2.anticipations;
+    sc_data[i][2] += res2.perseverations;
+    sc_data[i][3] += res2.reversals;
+    sc_data[i][4] += res2.object_sub;
+    sc_data[i][5] += res2.gesture_sub;
+    sc_data[i][6] += res2.tool_omission;
+    sc_data[i][7] += res2.action_addition;
+    sc_data[i][8] += res2.quality;
+    sc_data[i][9] += res2.bizarre;
+    if (res2.accomplished) {
+        sc_accomplishment[i] += 1;
+    }
+}
+
+static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int i)
+{
+    double *vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    double *vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+    ActionType this[MAX_STEPS];
+    ACS1        res1;
+    ACS2        res2;
+    int count = 0;
+    GList      *errors = NULL;
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Just lesion the context to hidden connections: */
+    network_lesion_weights_ih(net, sc_dd[4].level[i]);
     do {
 	world_set_network_input_vector(vector_in);
 	network_tell_input(net, vector_in);
@@ -461,17 +557,31 @@ static void error_frequencies_table_step_callback(GtkWidget *mi, void *count)
                 sc_run_and_score_activation_noise(xg.net, &sc_task, i);
             }
         }
-        else if (sc_task.damage == DAMAGE_WEIGHT_NOISE) {
+        else if (sc_task.damage == DAMAGE_CH_WEIGHT_NOISE) {
             for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
                 Network *tmp_net = network_copy(xg.net);
-                sc_run_and_score_weight_noise(tmp_net, &sc_task, i);
+                sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
                 network_tell_destroy(tmp_net);
             }
 	}
-        else if (sc_task.damage == DAMAGE_WEIGHT_LESION) {
+        else if (sc_task.damage == DAMAGE_CH_WEIGHT_LESION) {
             for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
                 Network *tmp_net = network_copy(xg.net);
-                sc_run_and_score_weight_lesion(tmp_net, &sc_task, i);
+                sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
+                network_tell_destroy(tmp_net);
+            }
+	}
+        else if (sc_task.damage == DAMAGE_IH_WEIGHT_NOISE) {
+            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                Network *tmp_net = network_copy(xg.net);
+                sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
+                network_tell_destroy(tmp_net);
+            }
+	}
+        else if (sc_task.damage == DAMAGE_IH_WEIGHT_LESION) {
+            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                Network *tmp_net = network_copy(xg.net);
+                sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
                 network_tell_destroy(tmp_net);
             }
 	}
@@ -520,6 +630,8 @@ void create_bp_error_frequencies_viewer(GtkWidget *vbox)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[0].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[1].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[2].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[3].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[4].label);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), sc_task.damage - 1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "changed", G_CALLBACK(set_damage_callback), NULL);

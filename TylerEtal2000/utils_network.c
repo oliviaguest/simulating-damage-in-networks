@@ -16,20 +16,20 @@ typedef enum boolean {
 char *nt_name[NT_MAX] = {
     "FFN",
 #ifdef CLAMPED
-    "SRN (Clamped)"
+    "RAN_C"
 #else
-    "SRN (Unclamped)"
+    "RAN_U"
 #endif
 };
 
-// Set SRN_SETTLING_CYCLES to the number of cycles used when training the SRN
+// Set RAN_SETTLING_CYCLES to the number of cycles used when training the RAN
 // (which is basically the length of the "sequence" for each input pattern).
 // 10 seems ot be enough to settle ... at least for the Tyler et al. (2000) network
-#define SRN_SETTLING_CYCLES 10
+#define RAN_SETTLING_CYCLES 10
 
 // Set INPUT_CLAMP_DURATION to zero to keep clamps on for the entire settling
 // period, or N to keep the input clamped just for the first N cycles. If
-// SRN_SETTLING_CYCLES is 10, then 4 seems to be a reasonable value for this
+// RAN_SETTLING_CYCLES is 10, then 4 seems to be a reasonable value for this
 #ifdef CLAMPED
 #define INPUT_CLAMP_DURATION 0
 #else
@@ -173,7 +173,7 @@ void network_lesion_weights_hh(Network *n, double severity)
 {
     int i, j;
 
-    if (n->weights_hh != NULL) { // For SRN only
+    if (n->weights_hh != NULL) { // For RAN only
 // fprintf(stdout, "Lesion HH weights at %f severity\n", severity);
         for (i = 0; i < n->hidden_width; i++) { // No hidden to hidden bias to worry about
             for (j = 0; j < n->hidden_width; j++) {
@@ -248,7 +248,7 @@ void network_perturb_weights_hh(Network *n, double noise_sd)
 {
     int i, j;
 
-    if (n->weights_hh != NULL) { // For SRN only
+    if (n->weights_hh != NULL) { // For RAN only
         for (i = 0; i < n->hidden_width; i++) { // No hidden to hidden bias to worry about
             for (j = 0; j < n->hidden_width; j++) {
                 n->weights_hh[i * n->hidden_width + j] = perturb(n->weights_hh[i * n->hidden_width + j], noise_sd);
@@ -411,7 +411,7 @@ void write_network_deltas(FILE *fp, Network *n)
 
 void network_destroy(Network *n)
 {
-    /* Generalised Version (FF and SRN): */
+    /* Generalised Version (FF and RAN): */
 
     if (n != NULL) {
         if (n->weights_ih != NULL) { free(n->weights_ih); }
@@ -490,7 +490,7 @@ void network_initialise_weights(Network *net, double weight_noise)
 
 Network *network_initialise(NetworkType nt, int iw, int hw, int ow)
 {
-    /* Generalised version (for both FF and SRN) */
+    /* Generalised version (for both FF and RAN) */
 
     Network *n;
     int i, j;
@@ -619,7 +619,7 @@ Network *network_copy(Network *n)
             }
         }
         if (n->nt == NT_RECURRENT) {
-            /* It's an SRN - copy the recurrent weights: */
+            /* It's an RAN - copy the recurrent weights: */
             if ((r->weights_hh = (double *)malloc(r->hidden_width * r->hidden_width * sizeof(double))) != NULL) {
                 for (i = 0; i < r->hidden_width; i++) {
                     for (j = 0; j < r->hidden_width; j++) {
@@ -652,7 +652,7 @@ Network *network_copy(Network *n)
             r->units_hidden[r->hidden_width] = 1.0; // The bias unit ... never change this!
         }
         if (n->nt == NT_RECURRENT) {
-            /* It's an SRN - copy the previous hidden unit values: */
+            /* It's an RAN - copy the previous hidden unit values: */
             if ((r->units_hidden_prev = (double *)malloc(r->hidden_width * sizeof(double))) != NULL) {
                 for (i = 0; i < r->hidden_width; i++) {
                     r->units_hidden_prev[i] = n->units_hidden_prev[i];
@@ -741,7 +741,7 @@ void network_tell_input(Network *n, double *vector)
 
 void network_tell_propagate(Network *n)
 {
-    /* Generalised version (FF or SRN) */
+    /* Generalised version (FF or RAN) */
 
     int i, j;
 
@@ -849,7 +849,7 @@ static void training_patterns_randomise(PatternList *patterns)
 
 static void network_train_initialise_deltas(Network *n)
 {
-    /* Generalised version (FF and SRN): */
+    /* Generalised version (FF and RAN): */
 
     int i, j;
 
@@ -874,7 +874,7 @@ static void network_train_initialise_deltas(Network *n)
 
 static void network_train_update_weights(Network *n, double lr, double wd, double momentum)
 {
-    /* Generalised Version (both FF and SRN):                   */
+    /* Generalised Version (both FF and RAN):                   */
     /* From Hertz et al., 1991, pp. 116-117 (momentum: p. 123)  */
 
     double this_delta;
@@ -970,9 +970,9 @@ static void network_accumulate_weight_changes_ff(Network *n, double *test_in, do
 
 static void network_accumulate_weight_changes_srn(Network *n, double *test_in, double *test_out, double (*net_error_function)())
 {
-    /* SRN learning: An implementation of epochwise BPTT, based on Williams & Zipser, 1995 */
+    /* RAN learning: An implementation of epochwise BPTT, based on Williams & Zipser, 1995 */
 
-    int cycles = SRN_SETTLING_CYCLES; 
+    int cycles = RAN_SETTLING_CYCLES; 
     int units = n->hidden_width + n->out_width;
     double *history_hidden = (double *)malloc((cycles+2) * n->hidden_width * sizeof(double));
     double *history_error = (double *)malloc((cycles+2) * n->out_width * sizeof(double));

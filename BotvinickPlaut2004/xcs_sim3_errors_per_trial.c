@@ -2,7 +2,7 @@
 #include "xframe.h"
 #include "lib_string.h"
 #include "lib_cairox.h"
-#include "lib_cairoxg_2_3.h"
+#include "lib_cairoxg_2_4.h"
 #include "xcs_sequences.h"
 
 #define ERROR_CATEGORIES  4
@@ -13,7 +13,7 @@ static GtkWidget *viewer_widget = NULL;
 static cairo_surface_t *viewer_surface = NULL;
 
 static TaskType sc_task = {TASK_COFFEE, DAMAGE_ACTIVATION_NOISE, {FALSE, FALSE, FALSE, FALSE, FALSE}};
-static double sc_data[MAX_LEVELS][ERROR_CATEGORIES];
+static double sc_data[TASK_MAX][MAX_LEVELS][ERROR_CATEGORIES];
 static int sc_count = 0;
 
 typedef struct damage_details {
@@ -23,10 +23,12 @@ typedef struct damage_details {
     char *format;
 } DamageDetails;
 
-static DamageDetails sc_dd[3] = {
+static DamageDetails sc_dd[5] = {
     {"Activation Noise (s.d.)",    10, { 0.00,  0.01,  0.02,  0.03,  0.04,  0.05,  0.10,  0.20,  0.30,  0.40,  0.00}, "%4.2f"},
-    {"Weight Noise (s.d.)",         8, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.000, 0.000,  0.00}, "%5.3f"},
-    {"Connections Severed (proportion)",  9, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.150, 0.000, 0.000}, "%5.3f"}
+    {"CH Weight Noise (s.d.)",         8, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.000, 0.000,  0.00}, "%5.3f"},
+    {"CH Connections Severed (proportion)",  9, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.150, 0.000, 0.000}, "%5.3f"},
+    {"IH Weight Noise (s.d.)",         8, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.000, 0.000,  0.00}, "%5.3f"},
+    {"IH Connections Severed (proportion)",  9, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.040, 0.080, 0.150, 0.000, 0.000}, "%5.3f"}
 };
 
 // Maximum number of errors on the vertical axis of the graph:
@@ -75,19 +77,19 @@ static void sc_run_and_score_activation_noise(Network *net, TaskType *task, int 
     errors = analyse_actions_with_acs2(task, &res2);
     analyse_actions_code_free_error_list(errors);
 
-    sc_data[i][0] += res2.omissions;
-    sc_data[i][1] += res2.anticipations;
-    sc_data[i][1] += res2.perseverations;
-    sc_data[i][1] += res2.reversals;
-    sc_data[i][2] += res2.bizarre;
-    sc_data[i][3] += res2.object_sub;
-    sc_data[i][3] += res2.gesture_sub;
-    sc_data[i][3] += res2.tool_omission;
-    sc_data[i][3] += res2.action_addition;
-    sc_data[i][3] += res2.quality;
+    sc_data[task->base][i][0] += res2.omissions;
+    sc_data[task->base][i][1] += res2.anticipations;
+    sc_data[task->base][i][1] += res2.perseverations;
+    sc_data[task->base][i][1] += res2.reversals;
+    sc_data[task->base][i][2] += res2.bizarre;
+    sc_data[task->base][i][3] += res2.object_sub;
+    sc_data[task->base][i][3] += res2.gesture_sub;
+    sc_data[task->base][i][3] += res2.tool_omission;
+    sc_data[task->base][i][3] += res2.action_addition;
+    sc_data[task->base][i][3] += res2.quality;
 }
 
-static void sc_run_and_score_weight_noise(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_noise(Network *net, TaskType *task, int i)
 {
     double    *vector_in;
     double    *vector_out;
@@ -122,19 +124,19 @@ static void sc_run_and_score_weight_noise(Network *net, TaskType *task, int i)
     errors = analyse_actions_with_acs2(task, &res2);
     analyse_actions_code_free_error_list(errors);
 
-    sc_data[i][0] += res2.omissions;
-    sc_data[i][1] += res2.anticipations;
-    sc_data[i][1] += res2.perseverations;
-    sc_data[i][1] += res2.reversals;
-    sc_data[i][2] += res2.object_sub;
-    sc_data[i][2] += res2.gesture_sub;
-    sc_data[i][2] += res2.tool_omission;
-    sc_data[i][2] += res2.action_addition;
-    sc_data[i][2] += res2.quality;
-    sc_data[i][3] += res2.bizarre;
+    sc_data[task->base][i][0] += res2.omissions;
+    sc_data[task->base][i][1] += res2.anticipations;
+    sc_data[task->base][i][1] += res2.perseverations;
+    sc_data[task->base][i][1] += res2.reversals;
+    sc_data[task->base][i][2] += res2.object_sub;
+    sc_data[task->base][i][2] += res2.gesture_sub;
+    sc_data[task->base][i][2] += res2.tool_omission;
+    sc_data[task->base][i][2] += res2.action_addition;
+    sc_data[task->base][i][2] += res2.quality;
+    sc_data[task->base][i][3] += res2.bizarre;
 }
 
-static void sc_run_and_score_weight_lesion(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_lesion(Network *net, TaskType *task, int i)
 {
     double    *vector_in;
     double    *vector_out;
@@ -169,16 +171,110 @@ static void sc_run_and_score_weight_lesion(Network *net, TaskType *task, int i)
     errors = analyse_actions_with_acs2(task, &res2);
     analyse_actions_code_free_error_list(errors);
 
-    sc_data[i][0] += res2.omissions;
-    sc_data[i][1] += res2.anticipations;
-    sc_data[i][1] += res2.perseverations;
-    sc_data[i][1] += res2.reversals;
-    sc_data[i][2] += res2.object_sub;
-    sc_data[i][2] += res2.gesture_sub;
-    sc_data[i][2] += res2.tool_omission;
-    sc_data[i][2] += res2.action_addition;
-    sc_data[i][2] += res2.quality;
-    sc_data[i][3] += res2.bizarre;
+    sc_data[task->base][i][0] += res2.omissions;
+    sc_data[task->base][i][1] += res2.anticipations;
+    sc_data[task->base][i][1] += res2.perseverations;
+    sc_data[task->base][i][1] += res2.reversals;
+    sc_data[task->base][i][2] += res2.object_sub;
+    sc_data[task->base][i][2] += res2.gesture_sub;
+    sc_data[task->base][i][2] += res2.tool_omission;
+    sc_data[task->base][i][2] += res2.action_addition;
+    sc_data[task->base][i][2] += res2.quality;
+    sc_data[task->base][i][3] += res2.bizarre;
+}
+
+static void sc_run_and_score_ih_weight_noise(Network *net, TaskType *task, int i)
+{
+    double    *vector_in;
+    double    *vector_out;
+    ActionType this[MAX_STEPS];
+    ACS1       res1;
+    ACS2       res2;
+    int        count = 0;
+    GList     *errors = NULL;
+
+    vector_in = (double *)malloc(net->in_width * sizeof(double));
+    vector_out = (double *)malloc(net->out_width * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Add noise to context to hidden connections: */
+    network_perturb_weights_ih(net, sc_dd[3].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &res1);
+    errors = analyse_actions_with_acs2(task, &res2);
+    analyse_actions_code_free_error_list(errors);
+
+    sc_data[task->base][i][0] += res2.omissions;
+    sc_data[task->base][i][1] += res2.anticipations;
+    sc_data[task->base][i][1] += res2.perseverations;
+    sc_data[task->base][i][1] += res2.reversals;
+    sc_data[task->base][i][2] += res2.object_sub;
+    sc_data[task->base][i][2] += res2.gesture_sub;
+    sc_data[task->base][i][2] += res2.tool_omission;
+    sc_data[task->base][i][2] += res2.action_addition;
+    sc_data[task->base][i][2] += res2.quality;
+    sc_data[task->base][i][3] += res2.bizarre;
+}
+
+static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int i)
+{
+    double    *vector_in;
+    double    *vector_out;
+    ActionType this[MAX_STEPS];
+    ACS1       res1;
+    ACS2       res2;
+    int        count = 0;
+    GList     *errors = NULL;
+
+    vector_in = (double *)malloc(net->in_width * sizeof(double));
+    vector_out = (double *)malloc(net->out_width * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Lesion the context to hidden connections: */
+    network_lesion_weights_ih(net, sc_dd[4].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &res1);
+    errors = analyse_actions_with_acs2(task, &res2);
+    analyse_actions_code_free_error_list(errors);
+
+    sc_data[task->base][i][0] += res2.omissions;
+    sc_data[task->base][i][1] += res2.anticipations;
+    sc_data[task->base][i][1] += res2.perseverations;
+    sc_data[task->base][i][1] += res2.reversals;
+    sc_data[task->base][i][2] += res2.object_sub;
+    sc_data[task->base][i][2] += res2.gesture_sub;
+    sc_data[task->base][i][2] += res2.tool_omission;
+    sc_data[task->base][i][2] += res2.action_addition;
+    sc_data[task->base][i][2] += res2.quality;
+    sc_data[task->base][i][3] += res2.bizarre;
 }
 
 /*****************************************************************************/
@@ -206,10 +302,10 @@ static void errors_per_trial_chart_write_to_cairo(cairo_t *cr, int width, int he
     graph_set_axis_tick_marks(errors_per_trial_chart, GTK_ORIENTATION_HORIZONTAL, (2*sc_dd[sc_task.damage-1].num_levels)+1, labels);
 
     if (sc_count == 1) {
-        g_snprintf(buffer, 128, "Average number of errors per trial for %d trial of the %s task", sc_count, (sc_task.base == TASK_COFFEE ? "coffee" : "tea"));
+        g_snprintf(buffer, 128, "Average number of errors per trial for %d trial", sc_count);
     }
     else {
-        g_snprintf(buffer, 128, "Average number of errors per trial for %d trials of the %s task", sc_count, (sc_task.base == TASK_COFFEE ? "coffee" : "tea"));
+        g_snprintf(buffer, 128, "Average number of errors per trial for %d trials", sc_count);
     }
     graph_set_title(errors_per_trial_chart, buffer);
 
@@ -218,17 +314,38 @@ static void errors_per_trial_chart_write_to_cairo(cairo_t *cr, int width, int he
     for (j = 0; j < ERROR_CATEGORIES; j++) {
         for (i = 0; i < num_categories; i++) {
             errors_per_trial_chart->dataset[j].x[i] = 0.5 + i;
-            if (sc_count == 0) {
+            errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].x[i] = 0.5 + i;
+            if ((sc_count == 0) || (sc_task.base == TASK_NONE)) {
                 errors_per_trial_chart->dataset[j].y[i] = 0.0;
+                errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].y[i] = 0.0;
             }
             else {
-                errors_per_trial_chart->dataset[j].y[i] = sc_data[i][j] / (double) sc_count;
+                if (sc_task.base == TASK_MAX) {
+                    errors_per_trial_chart->dataset[j].y[i] = sc_data[TASK_COFFEE][i][j] / (double) sc_count;
+                    errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].y[i] = sc_data[TASK_TEA][i][j] / (double) sc_count;
+                }
+                else {
+                    errors_per_trial_chart->dataset[j].y[i] = sc_data[(int) sc_task.base][i][j] / (double) sc_count;
+                }
             }
+            errors_per_trial_chart->dataset[j].se[i] = 0.0;
+            errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].se[i] = 0.0;
         }
-        errors_per_trial_chart->dataset[j].points = sc_dd[sc_task.damage-1].num_levels;
+        if (sc_task.base == TASK_NONE) {
+            errors_per_trial_chart->dataset[j].points = 0;
+            errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].points = 0;
+        }
+        else if (sc_task.base == TASK_MAX) {
+            errors_per_trial_chart->dataset[j].points = sc_dd[sc_task.damage-1].num_levels;
+            errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].points = sc_dd[sc_task.damage-1].num_levels;
+        }
+        else {
+            errors_per_trial_chart->dataset[j].points = sc_dd[sc_task.damage-1].num_levels;
+            errors_per_trial_chart->dataset[ERROR_CATEGORIES+j].points = 0;
+        }
     }
 
-    cairox_draw_graph(cr, errors_per_trial_chart, TRUE);
+    cairox_draw_graph(cr, errors_per_trial_chart, xg.colour);
 }
 
 
@@ -262,12 +379,14 @@ static Boolean errors_per_trial_chart_expose(GtkWidget *widget, GdkEvent *event,
 
 static void initialise_sc_data()
 {
-    int i, j;
+    int i, j, t;
 
     sc_count = 0;
-    for (i = 0; i < MAX_LEVELS; i++) {
-        for (j = 0; j < ERROR_CATEGORIES; j++) {
-            sc_data[i][j] = 0.0;
+    for (t = 0; t < TASK_MAX; t++) {
+        for (i = 0; i < MAX_LEVELS; i++) {
+            for (j = 0; j < ERROR_CATEGORIES; j++) {
+                sc_data[t][i][j] = 0.0;
+            }
         }
     }
 }
@@ -278,51 +397,170 @@ static void errors_per_trial_chart_reset_callback(GtkWidget *mi, void *dummy)
     errors_per_trial_chart_expose(NULL, NULL, NULL);
 }
 
-static void errors_per_trial_chart_set_task_callback(GtkWidget *button, void *task)
+static void adjust_stacked_barchart(GraphStruct *chart, int num_bars, int bar_width)
 {
-    if (GTK_TOGGLE_BUTTON(button)->active) {
-        sc_task.base = (BaseTaskType) task;
-        sc_task.initial_state.bowl_closed = pars.sugar_closed;
-        sc_task.initial_state.mug_contains_coffee = pars.mug_with_coffee; 
-        sc_task.initial_state.mug_contains_tea = pars.mug_with_tea;
-        sc_task.initial_state.mug_contains_cream = pars.mug_with_cream;
-        sc_task.initial_state.mug_contains_sugar = pars.mug_with_sugar; 
-        errors_per_trial_chart_reset_callback(NULL, NULL);
+    int i;
+
+    graph_set_stack_bars(chart, num_bars);
+    for (i = 0; i < ERROR_CATEGORIES * num_bars; i++) {
+        graph_set_dataset_barwidth(chart, i, bar_width);
     }
 }
 
-static void errors_per_trial_chart_step_callback(GtkWidget *mi, void *count)
+static void errors_per_trial_chart_set_task_callback(GtkWidget *button, void *task)
 {
-    int j = (long) count;
-    int i;
+    if (GTK_TOGGLE_BUTTON(button)->active) {
+        // Add the selected task from sv_task.base:
+        if (sc_task.base == TASK_NONE) {
+            sc_task.base = (BaseTaskType) task;
+            adjust_stacked_barchart(errors_per_trial_chart, 1, 40);
+        }
+        else if ((sc_task.base == TASK_COFFEE) && ((BaseTaskType) task == TASK_TEA)) {
+            sc_task.base = TASK_MAX;
+            adjust_stacked_barchart(errors_per_trial_chart, 2, 20);
+        }
+        else if ((sc_task.base == TASK_TEA) && ((BaseTaskType) task == TASK_COFFEE)) {
+            sc_task.base = TASK_MAX;
+            adjust_stacked_barchart(errors_per_trial_chart, 2, 20);
+        }
+    }
+    else {
+        // Remove the selected task from sc_task.base:
+        if ((sc_task.base == TASK_MAX) && ((BaseTaskType) task == TASK_TEA)) {
+            sc_task.base = TASK_COFFEE;
+            adjust_stacked_barchart(errors_per_trial_chart, 1, 40);
+        }
+        else if ((sc_task.base == TASK_MAX) && ((BaseTaskType) task == TASK_COFFEE)) {
+            sc_task.base = TASK_TEA;
+            adjust_stacked_barchart(errors_per_trial_chart, 1, 40);
+        }
+        else if (sc_task.base == (BaseTaskType) task) {
+            sc_task.base = TASK_NONE;
+            adjust_stacked_barchart(errors_per_trial_chart, 0, 0);
+        }
+    }
 
     sc_task.initial_state.bowl_closed = pars.sugar_closed;
     sc_task.initial_state.mug_contains_coffee = pars.mug_with_coffee; 
     sc_task.initial_state.mug_contains_tea = pars.mug_with_tea;
     sc_task.initial_state.mug_contains_cream = pars.mug_with_cream;
     sc_task.initial_state.mug_contains_sugar = pars.mug_with_sugar; 
-    while (j-- > 0) {
-        if (sc_task.damage == DAMAGE_ACTIVATION_NOISE) {
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                sc_run_and_score_activation_noise(xg.net, &sc_task, i);
+    errors_per_trial_chart_reset_callback(NULL, NULL);
+}
+
+static void errors_per_trial_chart_step_callback(GtkWidget *mi, void *count)
+{
+    if (sc_task.base != TASK_NONE) {
+        int j = (long) count;
+        int i;
+
+        sc_task.initial_state.bowl_closed = pars.sugar_closed;
+        sc_task.initial_state.mug_contains_coffee = pars.mug_with_coffee; 
+        sc_task.initial_state.mug_contains_tea = pars.mug_with_tea;
+        sc_task.initial_state.mug_contains_cream = pars.mug_with_cream;
+        sc_task.initial_state.mug_contains_sugar = pars.mug_with_sugar; 
+        while (j-- > 0) {
+            if (sc_task.damage == DAMAGE_ACTIVATION_NOISE) {
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i);
+                        sc_task.base = TASK_TEA;
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i);
+                    }
+                }
             }
-        }
-        else if (sc_task.damage == DAMAGE_WEIGHT_NOISE) {
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                Network *tmp_net = network_copy(xg.net);
-                sc_run_and_score_weight_noise(tmp_net, &sc_task, i);
-                network_tell_destroy(tmp_net);
+            else if (sc_task.damage == DAMAGE_CH_WEIGHT_NOISE) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
             }
-        }
-        else if (sc_task.damage == DAMAGE_WEIGHT_LESION) {
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                Network *tmp_net = network_copy(xg.net);
-                sc_run_and_score_weight_lesion(tmp_net, &sc_task, i);
-                network_tell_destroy(tmp_net);
+            else if (sc_task.damage == DAMAGE_CH_WEIGHT_LESION) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
             }
+            else if (sc_task.damage == DAMAGE_IH_WEIGHT_NOISE) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            else if (sc_task.damage == DAMAGE_IH_WEIGHT_LESION) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            sc_count++;
+            errors_per_trial_chart_expose(NULL, NULL, NULL);
         }
-        sc_count++;
-        errors_per_trial_chart_expose(NULL, NULL, NULL);
     }
 }
 
@@ -405,6 +643,8 @@ void create_bp_errors_per_trial_viewer(GtkWidget *vbox)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[0].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[1].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[2].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[3].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[4].label);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), sc_task.damage - 1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "changed", G_CALLBACK(set_damage_callback), NULL);
@@ -436,14 +676,14 @@ void create_bp_errors_per_trial_viewer(GtkWidget *vbox)
 
     /**** Widgets for setting the task: ****/
 
-    tmp = gtk_radio_button_new_with_label(NULL, "Coffee");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tmp), (sc_task.base == TASK_COFFEE));
+    tmp = gtk_check_button_new_with_label("Coffee");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tmp), ((sc_task.base == TASK_COFFEE) || (sc_task.base == TASK_MAX)));
     g_signal_connect(G_OBJECT(tmp), "toggled", G_CALLBACK(errors_per_trial_chart_set_task_callback), (void *)TASK_COFFEE);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 3);
     gtk_widget_show(tmp);
 
-    tmp = gtk_radio_button_new_with_label(gtk_radio_button_get_group(GTK_RADIO_BUTTON(tmp)), "Tea");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tmp), (sc_task.base == TASK_TEA));
+    tmp = gtk_check_button_new_with_label("Tea");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tmp), ((sc_task.base == TASK_TEA) || (sc_task.base == TASK_MAX)));
     g_signal_connect(G_OBJECT(tmp), "toggled", G_CALLBACK(errors_per_trial_chart_set_task_callback), (void *)TASK_TEA);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 3);
     gtk_widget_show(tmp);
@@ -469,7 +709,7 @@ void create_bp_errors_per_trial_viewer(GtkWidget *vbox)
     gtk_box_pack_start(GTK_BOX(page), viewer_widget, TRUE, TRUE, 0);
     gtk_widget_show(viewer_widget);
 
-    errors_per_trial_chart = graph_create(ERROR_CATEGORIES);
+    errors_per_trial_chart = graph_create(ERROR_CATEGORIES*2);
     if ((fp = font_properties_create("Sans", 22, PANGO_STYLE_NORMAL, PANGO_WEIGHT_NORMAL, "black")) != NULL) {
         graph_set_title_font_properties(errors_per_trial_chart, fp);
         font_properties_set_size(fp, 18);
@@ -483,8 +723,12 @@ void create_bp_errors_per_trial_viewer(GtkWidget *vbox)
     graph_set_dataset_properties(errors_per_trial_chart, 1, "Sequence", 0.6, 0.6, 0.6, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(errors_per_trial_chart, 2, "Bizarre", 0.3, 0.3, 0.3, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(errors_per_trial_chart, 3, "Other", 0.0, 0.0, 0.0, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(errors_per_trial_chart, 4, NULL, 1.0, 1.0, 1.0, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(errors_per_trial_chart, 5, NULL, 0.6, 0.6, 0.6, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(errors_per_trial_chart, 6, NULL, 0.3, 0.3, 0.3, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(errors_per_trial_chart, 7, NULL, 0.0, 0.0, 0.0, 40, LS_SOLID, MARK_NONE);
     graph_set_legend_properties(errors_per_trial_chart, TRUE, 0.0, 0.0, NULL);
-    graph_set_stack_bars(errors_per_trial_chart, TRUE);
+    graph_set_stack_bars(errors_per_trial_chart, 1);
 
     gtk_container_add(GTK_CONTAINER(vbox), page);
     gtk_widget_show(page);

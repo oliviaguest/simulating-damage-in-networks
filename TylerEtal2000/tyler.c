@@ -13,9 +13,9 @@
 
 //    NetworkParameters pars: NT, WN, LR, Momentum, Decay, Error, Update, Epochs, Criterion
 NetworkParameters pars = 
-// {NT_FEEDFORWARD, 0.010, 0.250, 0.100, 0.000, SUM_SQUARE_ERROR, UPDATE_BY_EPOCH, 1000, 0.01};
+ {NT_FEEDFORWARD, 0.010, 0.250, 0.100, 0.000, SUM_SQUARE_ERROR, UPDATE_BY_EPOCH, 1000, 0.01};
 // {NT_RECURRENT, 0.010, 0.025, 0.100, 0.000, SUM_SQUARE_ERROR, UPDATE_BY_EPOCH, 1000, 0.01};
-{NT_RECURRENT, 0.010, 0.025, 0.100, 0.000, SUM_SQUARE_ERROR, UPDATE_BY_EPOCH, 5000, 0.01};
+// {NT_RECURRENT, 0.010, 0.025, 0.100, 0.000, SUM_SQUARE_ERROR, UPDATE_BY_EPOCH, 5000, 0.01};
 
 #define ERR_WRITE_CYCLES      1000
 
@@ -135,7 +135,7 @@ static int count_attractors_by_damage_level(Network *net)
 {
   // Start by just counting the attractors and writing the results to stdout
   // If that isn't too slow, do it for, say, 21 levels of damage and save the results
-  // Note: This is only sensible for the unclamped SRN, so make sure clamps are set to 4 in utils_network.c
+  // Note: This is only sensible for the unclamped RAN, so make sure clamps are set to 4 in utils_network.c
 
     int i, in_max;
     double vector_in[IO_WIDTH];

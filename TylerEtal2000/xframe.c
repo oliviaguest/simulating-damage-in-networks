@@ -308,6 +308,11 @@ static void callback_spin_wn(GtkWidget *button, XGlobals *xg)
     xg->pars.wn = gtk_spin_button_get_value(GTK_SPIN_BUTTON(button));
 }
 
+static void callback_spin_epochs(GtkWidget *button, XGlobals *xg)
+{
+    xg->pars.epochs = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(button));
+}
+
 /******************************************************************************/
 
 static void populate_weight_history_page(GtkWidget *page, XGlobals *xg)
@@ -555,6 +560,25 @@ static void populate_parameters_page(GtkWidget *page, XGlobals *xg)
     gtk_widget_set_size_request(GTK_WIDGET(tmp), 75, -1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "value-changed", GTK_SIGNAL_FUNC(callback_spin_wd), xg);
+    gtk_widget_show(tmp);
+    /*--- Pack and show the whole horizontal box ---*/
+    gtk_box_pack_start(GTK_BOX(page), hbox, FALSE, FALSE, 5);
+    gtk_widget_show(hbox);
+
+    /**** Widgets for adjusting the training epochs: ***/
+
+    hbox = gtk_hbox_new(FALSE, 0);
+    /*--- The label: ---*/
+    tmp = gtk_label_new("    Training epochs:");
+    gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
+    gtk_widget_show(tmp);
+    /*--- The spin button: ---*/
+    tmp = gtk_spin_button_new_with_range(0.0, 100000.0, 1);
+    gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(tmp), TRUE);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(tmp), xg->pars.epochs);
+    gtk_widget_set_size_request(GTK_WIDGET(tmp), 75, -1);
+    gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
+    g_signal_connect(G_OBJECT(tmp), "value-changed", GTK_SIGNAL_FUNC(callback_spin_epochs), xg);
     gtk_widget_show(tmp);
     /*--- Pack and show the whole horizontal box ---*/
     gtk_box_pack_start(GTK_BOX(page), hbox, FALSE, FALSE, 5);

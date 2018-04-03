@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    File:       lib_cairoxg_2_2.c
+    File:       lib_cairoxg_2_4.c
     Contents:   
     Author:     Rick Cooper
     Copyright (c) 2016 Richard P. Cooper
@@ -15,13 +15,19 @@
         void graph_set_axis_properties(GraphStruct *gd, GtkOrientation orientation, double min, double max, int ticks, char *format, char *label)
         void graph_set_legend_properties(GraphStruct *gd, Boolean show, double x, double y, char *label)
         void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r, double g, double b, int bar_width, LineStyle style, MarkerType mark)
+        void graph_set_dataset_barwidth(GraphStruct *gd, int i, int bar_width);
         void graph_set_axis_font_properties(GraphStruct *gd, GtkOrientation orientation, CairoxFontProperties *fp)
         void graph_set_title_font_properties(GraphStruct *gd, CairoxFontProperties *fp)
         void graph_set_legend_font_properties(GraphStruct *gd, CairoxFontProperties *fp)
+        void graph_set_stack_bars(GraphStruct *gd, int stacks)
+        void graph_set_show_values(GraphStruct *gd, Boolean show)
+
         void cairox_draw_graph(cairo_t *cr, GraphStruct *gd, Boolean colour)
 
 TO DO: Do away with the restriction on number of points per datasets and
        the symbolic constant CXG_POINT_MAX 
+TO DO: Currently stacked bar charts can have bars that are different widths -
+       even for the different datasets within a bar. This is silly.
 
 *******************************************************************************/
 
@@ -29,8 +35,9 @@ typedef enum {FALSE, TRUE} Boolean;
 
 /******** Include files: ******************************************************/
 
-#include "lib_cairoxg_2_2.h"
+#include "lib_cairoxg_2_4.h"
 #include "lib_string.h"
+#include "math.h"
 
 /* History: ********************************************************************
 
@@ -52,8 +59,13 @@ Version 2.2:
             the symbolic constant CXG_LINE_MAX 
 24/11/2016: Allow setting of title / axis /legend font size, colour, style, etc.
 23/02/2017: Improve legend positioning and don't draw legend entries if no data
-XX/11/2016: Do away with the restriction on number of points per datasets and
-            the symbolic constant CXG_POINT_MAX 
+
+Version 2.3:
+26/02/2017: Add graph properties to allow display of values
+27/02/2017: Allow stacked bar charts
+
+Version 2.4:
+27/11/2017: Allow multiple stacked bar charts
 
 *******************************************************************************/
 
@@ -143,6 +155,8 @@ GraphStruct *graph_create(int num_ds)
         gd->axis[1].tick_labels = NULL;
         font_props_set_defaults(&(gd->axis[1].font), DEFAULT_AXIS_FONT_SIZE);
         gd->legend_show = FALSE;
+        gd->show_values = FALSE;
+        gd->stack_bars = 0;
         gd->legend_label = NULL;
         font_props_set_defaults(&(gd->legend_font), DEFAULT_LEGEND_FONT_SIZE);
         gd->dataset = ds;
@@ -261,6 +275,13 @@ void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r,
     }
 }
 
+void graph_set_dataset_barwidth(GraphStruct *gd, int i, int bar_width)
+{
+    if ((gd != NULL) && (gd->datasets > i)) {
+        gd->dataset[i].bar_width = bar_width;
+    }
+}
+
 /*============================================================================*/
 
 static void font_properties_set(CairoxFontProperties *target, CairoxFontProperties *source)
@@ -350,6 +371,7 @@ static void cairoxg_draw_axis_labels(cairo_t *cr, PangoLayout *layout, GraphStru
     cairox_line_parameters_set(&lp, 1.0, LS_SOLID, FALSE);
 
     if (orientation == GTK_ORIENTATION_VERTICAL) {
+        /* Tick marks: */
         pangox_layout_set_font_properties(layout, &(gd->axis[1].font));
         for (i = 0; i < gd->axis[1].ticks; i++) {
             y = y1-gd->margin_lower - (y1-y0-gd->margin_upper-gd->margin_lower) * i / (double) (gd->axis[1].ticks-1);
@@ -362,19 +384,24 @@ static void cairoxg_draw_axis_labels(cairo_t *cr, PangoLayout *layout, GraphStru
             else {
                 buffer[0] = '\0';
             }
-            cairox_paint_line(cr, &lp, x0+gd->margin_left-3, y, x0+gd->margin_left+2, y);
-            cairox_text_parameters_set(&tp, x0+gd->margin_left-4, y, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_CENTER, 0.0);
-            cairox_text_parameters_set_colour(&tp, (gd->axis[1].font.colour));
-            cairox_paint_pango_text(cr, &tp, layout, buffer);
-            pango_layout_get_size(layout, &w, &h);
-            max_w = MAX(w/PANGO_SCALE, max_w);
+            if (buffer[0] != '\0') {
+                /* Only show the tick and label if the label is non-null */
+                cairox_paint_line(cr, &lp, x0+gd->margin_left-3, y, x0+gd->margin_left+2, y);
+                cairox_text_parameters_set(&tp, x0+gd->margin_left-4, y, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_CENTER, 0.0);
+                cairox_text_parameters_set_colour(&tp, (gd->axis[1].font.colour));
+                cairox_paint_pango_text(cr, &tp, layout, buffer);
+                pango_layout_get_size(layout, &w, &h);
+                max_w = MAX(w/PANGO_SCALE, max_w);
+            }
         }
         /* The axis label: */
-        x = x0+gd->margin_left-max_w-gd->axis[1].font.size;
-        y = y1-gd->margin_lower - (y1-y0-2-gd->margin_upper-gd->margin_lower) * 0.5;
-        cairox_text_parameters_set(&tp, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_CENTER, 90.0);
-        cairox_text_parameters_set_colour(&tp, (gd->axis[1].font.colour));
-        cairox_paint_pango_text(cr, &tp, layout, gd->axis[1].label);
+        if (gd->axis[1].label != NULL) {
+            x = x0+gd->margin_left-max_w-gd->axis[1].font.size;
+            y = y1-gd->margin_lower - (y1-y0-2-gd->margin_upper-gd->margin_lower) * 0.5;
+            cairox_text_parameters_set(&tp, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_CENTER, 90.0);
+            cairox_text_parameters_set_colour(&tp, (gd->axis[1].font.colour));
+            cairox_paint_pango_text(cr, &tp, layout, gd->axis[1].label);
+        }
     }
     else {
         pangox_layout_set_font_properties(layout, &(gd->axis[0].font));
@@ -389,17 +416,22 @@ static void cairoxg_draw_axis_labels(cairo_t *cr, PangoLayout *layout, GraphStru
             else {
                 buffer[0] = '\0';
             }
-            cairox_paint_line(cr, &lp, x, y1-gd->margin_lower-2, x,  y1-gd->margin_lower+3);
-            cairox_text_parameters_set(&tp, x, y1-gd->margin_lower+4, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_TOP, 0.0);
-            cairox_text_parameters_set_colour(&tp, (gd->axis[0].font.colour));
-            cairox_paint_pango_text(cr, &tp, layout, buffer);
+            if (buffer[0] != '\0') {
+                /* Only show the tick and label if the label is non-null */
+                cairox_paint_line(cr, &lp, x, y1-gd->margin_lower-2, x,  y1-gd->margin_lower+3);
+                cairox_text_parameters_set(&tp, x, y1-gd->margin_lower+4, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_TOP, 0.0);
+                cairox_text_parameters_set_colour(&tp, (gd->axis[0].font.colour));
+                cairox_paint_pango_text(cr, &tp, layout, buffer);
+            }
         }
         /* The axis label: */
-        x = x0+gd->margin_left + (x1-x0-gd->margin_left-gd->margin_right) * 0.5;
-        y = y1 - 4;
-        cairox_text_parameters_set(&tp, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_BOTTOM, 0.0);
-        cairox_text_parameters_set_colour(&tp, (gd->axis[0].font.colour));
-        cairox_paint_pango_text(cr, &tp, layout, gd->axis[0].label);
+        if (gd->axis[0].label != NULL) {
+            x = x0+gd->margin_left + (x1-x0-gd->margin_left-gd->margin_right) * 0.5;
+            y = y1 - 4;
+            cairox_text_parameters_set(&tp, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set_colour(&tp, (gd->axis[0].font.colour));
+            cairox_paint_pango_text(cr, &tp, layout, gd->axis[0].label);
+        }
     }
 }
 
@@ -438,28 +470,67 @@ static Boolean out_of_bounds(GraphStruct *gd, double y)
     return(y > gd->axis[1].max);
 }
 
-static double calculate_bar_offset(GraphStruct *gd, int l)
+static int max_width_of_bar(GraphStruct *gd, int i, int datasets_per_bar)
 {
-    double total_bar_width = 0;
-    double bar_width_so_far = 0;
-    int i;
+    int j, mw;
 
-    for (i = 0; i < gd->datasets; i++) {
-        if (gd->dataset[i].bar_width > 0) {
-            if (i < l) {
-                bar_width_so_far += gd->dataset[i].bar_width;
-            }
-            total_bar_width += gd->dataset[i].bar_width;
+    mw = gd->dataset[i].bar_width;
+    for (j = 1; j < datasets_per_bar; j++) {
+        if (gd->dataset[i+j].bar_width > mw) {
+            mw = gd->dataset[i+j].bar_width;
         }
     }
-    return(bar_width_so_far - (total_bar_width / 2.0));
+    return(mw);
+}
+
+static double calculate_bar_offset(GraphStruct *gd, int l)
+{
+    if (gd->stack_bars == 0) {
+        double total_bar_width = 0;
+        double bar_width_so_far = 0;
+        int i;
+
+        for (i = 0; i < gd->datasets; i++) {
+            if (gd->dataset[i].bar_width > 0) {
+                if (i < l) {
+                    bar_width_so_far += gd->dataset[i].bar_width;
+                }
+                total_bar_width += gd->dataset[i].bar_width;
+            }
+        }
+        return(bar_width_so_far - (total_bar_width / 2.0));
+    }
+    else if (gd->stack_bars == 1) {
+        int bar_width = max_width_of_bar(gd, 0, gd->datasets);
+        return(-bar_width / 2.0);
+    }
+    else {
+        // Multiple stacks - offset will depend on the number of datasets
+        // per bar:
+
+        double total_bar_width = 0;
+        double bar_width_so_far = 0;
+        int datasets_per_bar = (int) ceil(gd->datasets / (double) gd->stack_bars);
+        int i, bar_width;
+
+        i = 0;
+        while (i < gd->datasets) {
+            bar_width = max_width_of_bar(gd, i, datasets_per_bar);
+            if (i + datasets_per_bar <= l) {
+                bar_width_so_far += bar_width;
+            }
+            total_bar_width += bar_width;
+            i = i + datasets_per_bar;
+        }
+        return(bar_width_so_far - (total_bar_width / 2.0));
+    }
 }
 
 static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *gd, int l, Boolean colour)
 {
     CairoxTextParameters tp;
     char buffer[64];
-    double x_offset, y0;
+    double x_offset, y0, y_offset;
     double x, y, dy;
     int i = 0;
 
@@ -475,21 +546,47 @@ static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *
             x = gd->x+gd->margin_left + (gd->dataset[l].x[i] - gd->axis[0].min) * (gd->w-gd->margin_left-gd->margin_right) / (gd->axis[0].max - gd->axis[0].min);
             y = gd->y+gd->margin_upper + (gd->axis[1].max - gd->dataset[l].y[i]) * (gd->h-gd->margin_upper-gd->margin_lower) / (gd->axis[1].max - gd->axis[1].min);
 
+            if (gd->stack_bars == 0) {
+                y_offset = 0;
+            }
+            else if (gd->stack_bars == 1) {
+                int j;
+                double sum = 0;
+                for (j = 0; j < l; j++) {
+                    sum += gd->dataset[j].y[i];
+                }
+                y_offset = sum * (gd->h-gd->margin_upper-gd->margin_lower) / (gd->axis[1].max - gd->axis[1].min);
+            }
+            else {
+                // Multiple stacks: stack_base is the index of the first
+                // dataset in the current stack
+                int j, stack_base;
+                double sum = 0;
+                int datasets_per_bar = (int) ceil(gd->datasets / (double) gd->stack_bars);
+
+                stack_base = datasets_per_bar * (l / datasets_per_bar);
+                for (j = stack_base; j < l; j++) {
+                    sum += gd->dataset[j].y[i];
+                }
+                y_offset = sum * (gd->h-gd->margin_upper-gd->margin_lower) / (gd->axis[1].max - gd->axis[1].min);
+            }
+
             if (out_of_bounds(gd, gd->dataset[l].y[i])) {
-                // Cap y, or show nothing???
+                    // Cap y, or show nothing???
                 fprintf(stdout, "FIXME: %s: %s at %d [Value is out of bounds!]\n", __FILE__, __FUNCTION__, __LINE__);
             }
             cairoxg_dataset_set_colour(cr, gd, l, colour);
-            cairo_rectangle(cr, x+x_offset, y, gd->dataset[l].bar_width, y0-y);
+            cairo_rectangle(cr, x+x_offset, y-y_offset, gd->dataset[l].bar_width, y0-y);
             cairo_fill_preserve(cr);
             cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
             cairo_stroke(cr);
 
-
-            // This shows the actual value within the bar - perhaps inappropraite?
-            g_snprintf(buffer, 64, "%6.3f", gd->dataset[l].y[i]);
-            cairox_text_parameters_set(&tp, x+x_offset+gd->dataset[l].bar_width*0.5, y0-5, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_CENTER, 90.0);
-            cairox_paint_pango_text(cr, &tp, layout, buffer);
+            if ((gd->show_values) && (gd->dataset[l].y[i] != 0.0)) {
+                // This shows the actual value within the bar
+                g_snprintf(buffer, 64, "%6.3f", gd->dataset[l].y[i]);
+                cairox_text_parameters_set(&tp, x+x_offset+gd->dataset[l].bar_width*0.5, y0-5, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_CENTER, 90.0);
+                cairox_paint_pango_text(cr, &tp, layout, buffer);
+            }
         }
     }
     else { /* Show the data as a line: */
@@ -501,8 +598,7 @@ static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *
             cairo_move_to(cr, x, y);
             while (++i < gd->dataset[l].points) {
                 // If the point is out of bounds ...
-                if (FALSE) {
-//              if (out_of_bounds(gd, gd->dataset[l].y[i])) {
+                if (out_of_bounds(gd, gd->dataset[l].y[i])) {
                     // stroke the line so far,
                     cairo_stroke(cr);
                     // and cairo_move_to the next point that is within bounds, if there is one
@@ -536,6 +632,7 @@ static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *
             x_offset = calculate_bar_offset(gd, l);
             x = x + x_offset + gd->dataset[l].bar_width/2.0;
         }
+        // FIXME: The above needs to be adjusted for multiple stacked bars
 
         if (gd->dataset[l].mark != MARK_NONE) {
             cairox_paint_marker(cr, x, y, gd->dataset[l].mark);
@@ -582,28 +679,28 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
     }
 
     for (i = 0; i < gd->datasets; i++) {
-        if (gd->dataset[i].points > 0) {
+        if ((gd->dataset[i].points > 0) && (gd->dataset[i].label != NULL)) {
             y = y + line_sep;
             // set the colour/shade and draw
             cairoxg_dataset_set_colour(cr, gd, i, colour);
-            cairox_line_parameters_set(&lp, 1.0, gd->dataset[i].style, TRUE);
             if (gd->dataset[i].bar_width == 0) {
+                cairox_line_parameters_set(&lp, 1.0, gd->dataset[i].style, TRUE);
                 cairox_paint_line(cr, &lp, x+4, y-8, x+20, y-8);
                 cairox_paint_marker(cr, x+14, y-8, gd->dataset[i].mark);
             }
             else {
+                cairo_set_line_width(cr, 1.0);
+                cairo_set_antialias(cr, CAIRO_ANTIALIAS_NONE);
                 cairo_rectangle(cr, x+4, y-gd->legend_font.size, 20, gd->legend_font.size);
                 cairo_fill_preserve(cr);
                 cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
                 cairo_stroke(cr);
             }
-            if (gd->dataset[i].label != NULL) {
-                cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
-                cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
-                cairox_paint_pango_text(cr, &tp, layout, gd->dataset[i].label);
-                entry_width = pangox_layout_get_string_width(layout, gd->dataset[i].label);
-                legend_width = MAX(legend_width, entry_width + 4 + 29);
-            }
+            cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
+            cairox_paint_pango_text(cr, &tp, layout, gd->dataset[i].label);
+            entry_width = pangox_layout_get_string_width(layout, gd->dataset[i].label);
+            legend_width = MAX(legend_width, entry_width + 4 + 29);
         }
     }
 
@@ -612,6 +709,20 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
         cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
         cairo_rectangle(cr, x, y0, legend_width, y-y0+5);
         cairo_stroke(cr);
+    }
+}
+
+void graph_set_stack_bars(GraphStruct *gd, int stack)
+{
+    if (gd != NULL) {
+        gd->stack_bars = stack;
+    }
+}
+
+void graph_set_show_values(GraphStruct *gd, Boolean show)
+{
+    if (gd != NULL) {
+        gd->show_values = show;
     }
 }
 
@@ -633,27 +744,13 @@ void cairox_draw_graph(cairo_t *cr, GraphStruct *gd, Boolean colour)
         cairo_rectangle(cr, gd->x, gd->y, gd->w, gd->h);
         cairo_fill(cr);
 
-        for (i = 0; i < gd->datasets; i++) {
-            cairoxg_draw_dataset(cr, layout, gd, i, colour);
-        }
-
-        /* Fill around the graph to clip the data: */
-        // Above:
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-        cairo_rectangle(cr, gd->x, gd->y, gd->w, gd->margin_upper);
-        cairo_fill(cr);
-        // Below:
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-        cairo_rectangle(cr, gd->x, gd->y+gd->h-gd->margin_lower, gd->w, gd->margin_lower);
-        cairo_fill(cr);
-
-        /* Now draw the graph decorations: */
         cairoxg_draw_grid(cr, layout, gd);
         cairoxg_draw_title(cr, layout, gd);
         cairoxg_draw_axis_labels(cr, layout, gd, GTK_ORIENTATION_HORIZONTAL);
         cairoxg_draw_axis_labels(cr, layout, gd, GTK_ORIENTATION_VERTICAL);
-
-
+        for (i = 0; i < gd->datasets; i++) {
+            cairoxg_draw_dataset(cr, layout, gd, i, colour);
+        }
         if (gd->legend_show) {
             cairoxg_draw_legend(cr, layout, gd, colour);
         }

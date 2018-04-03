@@ -1,4 +1,4 @@
-17/02/2017: Revise drawing of some graphs/charts to use lib_cairoxg_2_3 and save as PDF
+27/02/2016: Revise drawing of some graphs/charts to use lib_cairoxg_2_3 and save as PDF
 
 21/04/2016: Remove global variables in network code to facilitate copying networks etc.
 

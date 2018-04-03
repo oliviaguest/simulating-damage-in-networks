@@ -1,3 +1,4 @@
+# Botvinick and Plaut (2004)
 This is an implementation of the Botvinick and Plaut (2004) SRN model
 of routine action selection and its disorders. To explore the model's
 behaviour it first needs to be trained. Open the "Train" tab and train
@@ -8,3 +9,15 @@ analyses. Each of these analyses takes the currently trained network
 and explores its behaviour according to one of the analyses from the
 original (i.e., 2004) publication, or with alternative forms of
 damage.
+
+## To run
+To run the model it first needs to be compiled (once) using [gcc](https://gcc.gnu.org): 
+```
+make all
+```
+
+Then, run the command below to launch the GUI:
+```
+./xbp
+```
+

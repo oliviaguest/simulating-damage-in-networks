@@ -377,6 +377,20 @@ void network_tell_randomise_hidden_units(Network *net)
     }
 }
 
+void network_perturb_weights_ih(Network *net, double variance)
+{
+    double sd = sqrt(variance);
+    int i, j;
+
+    if (net->weights_ih != NULL) {
+        for (i = 0; i < (net->in_width+1); i++) {
+            for (j = 0; j < net->hidden_width; j++) {
+                net->weights_ih[i * net->hidden_width + j] += random_normal(0, sd);
+            }
+        }
+    }
+}
+
 void network_perturb_weights_ch(Network *net, double variance)
 {
     double sd = sqrt(variance);
