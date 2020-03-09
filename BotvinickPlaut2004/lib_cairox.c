@@ -517,7 +517,7 @@ static void cairox_draw_wide_arrow(cairo_t *cr, CairoxPoint *coordinates, int po
             slope_a = line_calculate_slope(&coordinates[i-1], &coordinates[i]);
             slope_b = line_calculate_slope(&coordinates[i+1], &coordinates[i]);
 
-            if ((fabs(slope_b - slope_a) < 0.0001) || (fabs(slope_b + slope_a) < 0.0001)) {
+            if ((fabs(slope_b - slope_a) < 0.0001) || (fabs(slope_b - slope_a - M_PI) < 0.0001) || (fabs(slope_a - slope_b - M_PI) < 0.0001)) {
                 //            if (fabs(slope_b - slope_a) < 0.0001) {
                 /* Just draw a straight line to where the arc finishes! */
                 cairo_line_to(cr, point_b.x, point_b.y);

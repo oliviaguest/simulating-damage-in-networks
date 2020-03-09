@@ -1,7 +1,7 @@
 /*******************************************************************************
 
     File:       lib_cairoxg_2_4.c
-    Contents:   
+    Contents:   Cairo-based library for drawing line/bar graphs
     Author:     Rick Cooper
     Copyright (c) 2016 Richard P. Cooper
 
@@ -21,13 +21,13 @@
         void graph_set_legend_font_properties(GraphStruct *gd, CairoxFontProperties *fp)
         void graph_set_stack_bars(GraphStruct *gd, int stacks)
         void graph_set_show_values(GraphStruct *gd, Boolean show)
-
         void cairox_draw_graph(cairo_t *cr, GraphStruct *gd, Boolean colour)
 
-TO DO: Do away with the restriction on number of points per datasets and
-       the symbolic constant CXG_POINT_MAX 
-TO DO: Currently stacked bar charts can have bars that are different widths -
-       even for the different datasets within a bar. This is silly.
+TO DO: 
+ * Do away with the restriction on number of points per datasets and
+   the symbolic constant CXG_POINT_MAX 
+ * Currently stacked bar charts can have bars that are different widths -
+    even for the different datasets within a bar. This is silly.
 
 *******************************************************************************/
 
@@ -63,6 +63,15 @@ Version 2.2:
 Version 2.3:
 26/02/2017: Add graph properties to allow display of values
 27/02/2017: Allow stacked bar charts
+23/08/2017: Added default extent / margins to ensure a poorly initialised
+            graph appears when drawn
+23/08/2017: Fixed default behaviour when axes are not labelled
+23/08/2017: Fixed colour handling to use GdkRGBA instead of GdkColor, for
+            compatibility with latest lib_cairox.c
+20/09/2017: Fixed sizing of legend frame - the legend title will now fit
+            within the frame
+20/09/2017: Fixed positioning of legend w.r.t. graph frame when the frame
+            is offset from the page coordinates
 
 Version 2.4:
 27/11/2017: Allow multiple stacked bar charts
@@ -71,9 +80,9 @@ Version 2.4:
 
 // Default Font size for title / legend / axis labels
 
-#define DEFAULT_TITLE_FONT_SIZE 16
-#define DEFAULT_LEGEND_FONT_SIZE 14
-#define DEFAULT_AXIS_FONT_SIZE 14
+#define DEFAULT_TITLE_FONT_SIZE   16
+#define DEFAULT_LEGEND_FONT_SIZE  14
+#define DEFAULT_AXIS_FONT_SIZE    14
 
 /*----------------------------------------------------------------------------*/
 
@@ -149,15 +158,17 @@ GraphStruct *graph_create(int num_ds)
         gd->axis[0].label = NULL;
         gd->axis[0].format = NULL;
         gd->axis[0].tick_labels = NULL;
+        gd->axis[0].ticks = 0;
         font_props_set_defaults(&(gd->axis[0].font), DEFAULT_AXIS_FONT_SIZE);
         gd->axis[1].label = NULL;
         gd->axis[1].format = NULL;
         gd->axis[1].tick_labels = NULL;
+        gd->axis[1].ticks = 0;
         font_props_set_defaults(&(gd->axis[1].font), DEFAULT_AXIS_FONT_SIZE);
         gd->legend_show = FALSE;
+        gd->legend_label = NULL;
         gd->show_values = FALSE;
         gd->stack_bars = 0;
-        gd->legend_label = NULL;
         font_props_set_defaults(&(gd->legend_font), DEFAULT_LEGEND_FONT_SIZE);
         gd->dataset = ds;
         gd->datasets = num_ds;
@@ -665,8 +676,8 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
     int entry_width;
     int i;
 
-    x = gd->margin_left + gd->legend_x * (gd->w-gd->margin_left-gd->margin_right);
-    y0 = gd->margin_upper + gd->legend_y * (gd->h-gd->margin_upper-gd->margin_lower);
+    x = gd->x + gd->margin_left + gd->legend_x * (gd->w-gd->margin_left-gd->margin_right);
+    y0 = gd->y + gd->margin_upper + gd->legend_y * (gd->h-gd->margin_upper-gd->margin_lower);
 
     pangox_layout_set_font_properties(layout, &(gd->legend_font));
 
@@ -676,10 +687,11 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
         cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
         cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
         cairox_paint_pango_text(cr, &tp, layout, gd->legend_label);
+        legend_width = 29 + pangox_layout_get_string_width(layout, gd->legend_label) + 29;
     }
 
     for (i = 0; i < gd->datasets; i++) {
-        if ((gd->dataset[i].points > 0) && (gd->dataset[i].label != NULL)) {
+        if ((gd->dataset[i].label != NULL) && (gd->dataset[i].points > 0)) {
             y = y + line_sep;
             // set the colour/shade and draw
             cairoxg_dataset_set_colour(cr, gd, i, colour);
@@ -696,6 +708,8 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
                 cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
                 cairo_stroke(cr);
             }
+
+            /* And the label: */
             cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
             cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
             cairox_paint_pango_text(cr, &tp, layout, gd->dataset[i].label);

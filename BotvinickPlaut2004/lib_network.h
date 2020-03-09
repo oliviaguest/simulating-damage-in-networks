@@ -65,6 +65,8 @@ extern void network_inject_noise(Network *net, double sv_noise);
 extern void network_print_state(FILE *fp, Network *net, char *message);
 extern void network_lesion_weights_ih(Network *net, double severity);
 extern void network_lesion_weights_ch(Network *net, double severity);
+extern void network_ablate_context(Network *net, double proportion);
+extern void network_scale_weights(Network *net, double proportion);
 extern double network_test(Network *net, TrainingDataList *test_patterns, ErrorFunction ef);
 extern Boolean network_train(Network *net, TrainingDataList *test_patterns, double lr, ErrorFunction ef, WeightUpdateTime wut, Boolean penalty);
 

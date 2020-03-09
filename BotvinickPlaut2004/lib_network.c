@@ -472,6 +472,57 @@ void network_lesion_weights_ch(Network *net, double severity)
 
 /******************************************************************************/
 
+void network_ablate_context(Network *net, double severity)
+{
+    int i, j;
+
+    if (net->weights_hh != NULL) {
+        for (i = 0; i < net->hidden_width; i++) {
+            if (random_uniform(0.0, 1.0) < severity) {
+                for (j = 0; j < net->hidden_width; j++) {
+                    net->weights_hh[i * net->hidden_width + j] = 0;
+                }
+            }
+        }
+    }
+}
+
+/******************************************************************************/
+
+void network_scale_weights(Network *net, double proportion)
+{
+    int i, j;
+
+    /* Scale input to hidden weights: */
+    if (net->weights_ih != NULL) {
+        for (i = 0; i < (net->in_width+1); i++) {
+            for (j = 0; j < net->hidden_width; j++) {
+                net->weights_ih[i * net->hidden_width + j] *= proportion;
+            }
+        }
+    }
+
+    /* Scale hidden to hidden weights:*/
+    if (net->weights_hh != NULL) {
+        for (i = 0; i < net->hidden_width; i++) {
+            for (j = 0; j < net->hidden_width; j++) {
+                net->weights_hh[i * net->hidden_width + j] *= proportion;
+            }
+        }
+    }
+
+    /* Scale hidden to output weights:*/
+    if (net->weights_ho != NULL) {
+        for (i = 0; i < (net->hidden_width+1); i++) {
+            for (j = 0; j < net->out_width; j++) {
+                net->weights_ho[i * net->out_width + j] *= proportion;
+            }
+        }
+    }
+}
+
+/******************************************************************************/
+
 static void net_read_skip_blank_lines(FILE *fp)
 {
     int c;

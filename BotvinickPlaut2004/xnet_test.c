@@ -212,6 +212,11 @@ static void lesion_ch_callback(GtkWidget *mi, GtkWidget *frame)
     network_lesion_weights_ch(xg.net, lesion_severity / 100.0);
 }
 
+static void scale_weights_callback(GtkWidget *mi, GtkWidget *frame)
+{
+    network_scale_weights(xg.net, 1.0 - (lesion_severity / 100.0));
+}
+
 static void callback_spin_noise(GtkWidget *widget, GtkSpinButton *tmp)
 {
     test_noise = gtk_spin_button_get_value(tmp);
@@ -277,7 +282,7 @@ void test_net_create_widgets(GtkWidget *vbox)
 
     gtkx_button_create(hbox, "Lesion: I -> H", G_CALLBACK(lesion_ih_callback), xg.frame);
     gtkx_button_create(hbox, "Lesion: C -> H", G_CALLBACK(lesion_ch_callback), xg.frame);
-
+    gtkx_button_create(hbox, "Scale Weights", G_CALLBACK(scale_weights_callback), xg.frame);
     /* Widgets for adjusting the lesion severity: */
     /*--- The label: ---*/
     tmp = gtk_label_new("Severity (%):");

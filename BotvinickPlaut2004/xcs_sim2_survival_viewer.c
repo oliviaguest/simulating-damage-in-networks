@@ -13,12 +13,14 @@ static TaskType sv_task = {TASK_COFFEE, DAMAGE_ACTIVATION_NOISE, {FALSE, FALSE, 
 static int sv_data[TASK_MAX][MAX_STEPS];
 static double sv_level = 0.000;
 
-static char *sv_label[5] = {
+static char *sv_label[7] = {
     "Activation Noise (s.d.)",
     "CH Weight Noise (s.d.)",
     "CH Connections Severed (proportion)",
     "IH Weight Noise (s.d.)",
-    "IH Connections Severed (proportion)"
+    "IH Connections Severed (proportion)",
+    "Context Unit Removal (proportion)",
+    "Weight Scaling (proportion)"
 };
 
 static GraphStruct *survival_graph;
@@ -283,6 +285,80 @@ static void sv_run_and_score_ih_weight_lesion(Network *net, TaskType *task)
     }
 }
 
+static void sv_run_and_score_context_ablate(Network *net, TaskType *task)
+{
+    double    *vector_in;
+    double    *vector_out;
+    ActionType this[MAX_STEPS];
+    int        count = 0;
+
+    vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Ablate units in the context layer: */
+    network_ablate_context(net, sv_level);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    count = get_first_error(this, task);
+#if DEBUG
+    print_script(j, this, count);
+#endif
+    while (count-- > 0) {
+	sv_data[task->base][count]++;
+    }
+}
+
+static void sv_run_and_score_weight_scale(Network *net, TaskType *task)
+{
+    double    *vector_in;
+    double    *vector_out;
+    ActionType this[MAX_STEPS];
+    int        count = 0;
+
+    vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Scale network weights: */
+    network_scale_weights(net, sv_level);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    count = get_first_error(this, task);
+#if DEBUG
+    print_script(j, this, count);
+#endif
+    while (count-- > 0) {
+	sv_data[task->base][count]++;
+    }
+}
+
 /******************************************************************************/
 
 static void survival_graph_write_to_cairo(cairo_t *cr, int width, int height)
@@ -411,7 +487,7 @@ static void survival_viewer_set_task_callback(GtkWidget *button, void *task)
         }
     }
     else {
-        // Remove the selected task from sc_task.base:
+        // Remove the selected task from sv_task.base:
         if ((sv_task.base == TASK_MAX) && ((BaseTaskType) task == TASK_TEA)) {
             sv_task.base = TASK_COFFEE;
         }
@@ -528,6 +604,47 @@ static void survival_viewer_step_callback(GtkWidget *mi, void *count)
                 network_tell_destroy(tmp_net);
             }
         }
+        else if (sv_task.damage == DAMAGE_CONTEXT_ABLATE) {
+            Network *tmp_net;
+            if (sv_task.base == TASK_MAX) {
+                sv_task.base = TASK_COFFEE;
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_context_ablate(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+                sv_task.base = TASK_TEA;
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_context_ablate(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+                sv_task.base = TASK_MAX;
+            }
+            else if (sv_task.base != TASK_NONE) {
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_context_ablate(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+            }
+        }
+        else if (sv_task.damage == DAMAGE_WEIGHT_SCALE) {
+            Network *tmp_net;
+            if (sv_task.base == TASK_MAX) {
+                sv_task.base = TASK_COFFEE;
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_weight_scale(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+                sv_task.base = TASK_TEA;
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_weight_scale(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+                sv_task.base = TASK_MAX;
+            }
+            else if (sv_task.base != TASK_NONE) {
+                tmp_net = network_copy(xg.net);
+                sv_run_and_score_weight_scale(tmp_net, &sv_task);
+                network_tell_destroy(tmp_net);
+            }
+        }
+        else {
+            fprintf(stdout, "WARNING: Damage type %d not implemented\n", sv_task.damage);
+        }
     }
     survival_viewer_expose(NULL, NULL, NULL);
 }
@@ -555,12 +672,12 @@ static void viewer_widget_snap_callback(GtkWidget *button, void *dummy)
         cairo_t *cr;
         char filename[128];
         int width = 700;
-        int height = 400;
+        int height = 350; // Was 400;
 
-        g_snprintf(filename, 128, "%schart_survival_%d.png", OUTPUT_FOLDER, (int) sv_task.damage);
+        g_snprintf(filename, 128, "%sbp_survival_%d.png", OUTPUT_FOLDER, (int) sv_task.damage);
         cairo_surface_write_to_png(viewer_surface, filename);
         fprintf(stdout, "Chart written to %s\n", filename);
-        g_snprintf(filename, 128, "%schart_survival_%d.pdf", OUTPUT_FOLDER, (int) sv_task.damage);
+        g_snprintf(filename, 128, "%sbp_survival_%d.pdf", OUTPUT_FOLDER, (int) sv_task.damage);
         pdf_surface = cairo_pdf_surface_create(filename, width, height);
         cr = cairo_create(pdf_surface);
         survival_graph_write_to_cairo(cr, width, height);
@@ -621,6 +738,8 @@ void create_bp_sim2_survival_plot_viewer(GtkWidget *vbox)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sv_label[2]);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sv_label[3]);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sv_label[4]);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sv_label[5]);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sv_label[6]);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), sv_task.damage - 1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "changed", G_CALLBACK(set_damage_callback), NULL);

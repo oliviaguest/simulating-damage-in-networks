@@ -41,12 +41,14 @@ typedef struct damage_details {
     char *format;
 } DamageDetails;
 
-static DamageDetails sc_dd[5] = {
+static DamageDetails sc_dd[7] = {
     {"Activation Noise (s.d.)",    10, { 0.00,  0.01,  0.02,  0.03,  0.04,  0.05,  0.10,  0.20,  0.30,  0.40,  0.00}, "%4.2f"},
     {"CH Weight Noise (s.d.)",        10, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.200, 0.400,  0.00}, "%5.3f"},
     {"CH Connections Severed (proportion)", 10, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.050, 0.100, 0.200, 0.400, 0.000}, "%5.3f"},
     {"IH Weight Noise (s.d.)",        10, {0.000, 0.001, 0.002, 0.005, 0.010, 0.030, 0.050, 0.100, 0.200, 0.400,  0.00}, "%5.3f"},
-    {"IH Connections Severed (proportion)", 10, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.050, 0.100, 0.200, 0.400, 0.000}, "%5.3f"}
+    {"IH Connections Severed (proportion)", 10, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.050, 0.100, 0.200, 0.400, 0.000}, "%5.3f"},
+    {"Context Units Removed (proportion)", 10, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.050, 0.100, 0.200, 0.400, 0.000}, "%5.3f"},
+    {"Weight Scaling Factor (proportion)", 10, {1.00, 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00}, "%5.3f"}
 };
 
 static GraphStruct *subtask_chart;
@@ -578,6 +580,68 @@ static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int 
     action_list_score(this, task, i);
 }
 
+/*----------------------------------------------------------------------------*/
+
+static void sc_run_and_score_context_ablate(Network *net, TaskType *task, int i)
+{
+    double *vector_in, *vector_out;
+    ActionType this[MAX_STEPS];
+    int count = 0;
+
+    vector_in = (double *)malloc(net->in_width * sizeof(double));
+    vector_out = (double *)malloc(net->out_width * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Ablate the context units: */
+    network_ablate_context(net, sc_dd[5].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+    action_list_score(this, task, i);
+}
+
+/*----------------------------------------------------------------------------*/
+
+static void sc_run_and_score_weight_scaling(Network *net, TaskType *task, int i)
+{
+    double *vector_in, *vector_out;
+    ActionType this[MAX_STEPS];
+    int count = 0;
+
+    vector_in = (double *)malloc(net->in_width * sizeof(double));
+    vector_out = (double *)malloc(net->out_width * sizeof(double));
+
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Scale weights: */
+    network_scale_weights(net, sc_dd[6].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+    action_list_score(this, task, i);
+}
+
 /*****************************************************************************/
 
 static void subtask_chart_write_to_cairo(cairo_t *cr, int width, int height)
@@ -867,6 +931,52 @@ static void viewer_widget_step_callback(GtkWidget *mi, void *count)
                     }
                 }
             }
+            else if (sc_task.damage == DAMAGE_CONTEXT_ABLATE) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+
+            }
+            else if (sc_task.damage == DAMAGE_WEIGHT_SCALE) {
+                Network *tmp_net = NULL;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scaling(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scaling(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scaling(tmp_net, &sc_task, i);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            else {
+                fprintf(stdout, "WARNING: Damage type %d not implemented\n", sc_task.damage);
+            }
             sc_count++;
             subtask_chart_expose(NULL, NULL, NULL);
         }
@@ -880,12 +990,12 @@ static void viewer_widget_snap_callback(GtkWidget *button, void *dummy)
         cairo_t *cr;
         char filename[64];
         int width = 700;
-        int height = 400;
+        int height = 350; // Was 400;
 
-        g_snprintf(filename, 64, "%schart_subtasks_%d.png", OUTPUT_FOLDER, (int) sc_task.damage);
+        g_snprintf(filename, 64, "%sbp_subtasks_%d.png", OUTPUT_FOLDER, (int) sc_task.damage);
         cairo_surface_write_to_png(viewer_surface, filename);
         fprintf(stdout, "Chart written to %s\n", filename);
-        g_snprintf(filename, 64, "%schart_subtasks_%d.pdf", OUTPUT_FOLDER, (int) sc_task.damage);
+        g_snprintf(filename, 64, "%sbp_subtasks_%d.pdf", OUTPUT_FOLDER, (int) sc_task.damage);
         pdf_surface = cairo_pdf_surface_create(filename, width, height);
         cr = cairo_create(pdf_surface);
         subtask_chart_write_to_cairo(cr, width, height);
@@ -945,6 +1055,8 @@ void create_bp_sim2_subtask_chart_viewer(GtkWidget *vbox)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[2].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[3].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[4].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[5].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[6].label);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), sc_task.damage - 1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "changed", G_CALLBACK(set_damage_callback), NULL);
@@ -1004,13 +1116,13 @@ void create_bp_sim2_subtask_chart_viewer(GtkWidget *vbox)
     graph_set_dataset_properties(subtask_chart, 0, "Subtask intrusion", 0.3, 0.3, 0.3, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(subtask_chart, 1, "Subtask omission", 0.0, 0.0, 0.0, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(subtask_chart, 2, "Subtask perseveration", 1.0, 1.0, 1.0, 40, LS_SOLID, MARK_NONE);
-    graph_set_dataset_properties(subtask_chart, 3, "Subtask displacement", 0.6, 0.6, 0.6, 40, LS_SOLID, MARK_NONE);
-    graph_set_dataset_properties(subtask_chart, 4, "Within subtask error", 0.9, 0.9, 0.9, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(subtask_chart, 3, "Subtask displacement", 0.6, 0.7, 0.5, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(subtask_chart, 4, "Within subtask error", 0.9, 0.85, 0.95, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(subtask_chart, 5, NULL, 0.3, 0.3, 0.3, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(subtask_chart, 6, NULL, 0.0, 0.0, 0.0, 40, LS_SOLID, MARK_NONE);
     graph_set_dataset_properties(subtask_chart, 7, NULL, 1.0, 1.0, 1.0, 40, LS_SOLID, MARK_NONE);
-    graph_set_dataset_properties(subtask_chart, 8, NULL, 0.6, 0.6, 0.6, 40, LS_SOLID, MARK_NONE);
-    graph_set_dataset_properties(subtask_chart, 9, NULL, 0.9, 0.9, 0.9, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(subtask_chart, 8, NULL, 0.6, 0.7, 0.5, 40, LS_SOLID, MARK_NONE);
+    graph_set_dataset_properties(subtask_chart, 9, NULL, 0.9, 0.85, 0.95, 40, LS_SOLID, MARK_NONE);
     graph_set_legend_properties(subtask_chart, TRUE, 0.0, 0.0, NULL); // "Error Type");
     graph_set_stack_bars(subtask_chart, 1);
 

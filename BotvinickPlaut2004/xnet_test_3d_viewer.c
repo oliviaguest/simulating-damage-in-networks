@@ -100,7 +100,7 @@ Boolean net_3d_viewer_expose(GtkWidget *widget, GdkEvent *event, void *data)
 
         cr = cairo_create(net_3d_viewer_surface);
         layout = pango_cairo_create_layout(cr);
-        pangox_layout_set_font_size(layout, 12);
+        pangox_layout_set_font_size(layout, 14);
 
         cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
         cairo_paint(cr);
@@ -127,44 +127,123 @@ Boolean net_3d_viewer_expose(GtkWidget *widget, GdkEvent *event, void *data)
         y = height/2.0 + 25 + dl * sin(M_PI/6.0);
         draw_3d_vector(cr, out_vector, OUT_WIDTH, x, y);
 
+        // Now arrows between layers:
+        CairoxArrowParameters ap;
+        CairoxPoint coordinates[6];
+
+        cairox_arrow_parameters_set(&ap, 6.0, LS_SOLID, VS_CURVED, AH_SHARP, 0.5, FALSE);
+
+        coordinates[0].x = width/2.0 - (dl-10) * cos(M_PI/6.0);
+        coordinates[0].y = height/2.0 + 25 - (dl-10) * sin(M_PI/6.0);
+        coordinates[1].x = width/2.0  - 20 * cos(M_PI/6.0);
+        coordinates[1].y = height/2.0 + 25 - 20 * sin(M_PI/6.0);
+        cairox_paint_arrow(cr, coordinates, 2, &ap);
+
+        coordinates[0].x = width/2.0  + 10 * cos(M_PI/6.0);
+        coordinates[0].y = height/2.0 + 25 + 10 * sin(M_PI/6.0);
+        coordinates[1].x = width/2.0 + (dl-20) * cos(M_PI/6.0);
+        coordinates[1].y = height/2.0 + 25 + (dl-20) * sin(M_PI/6.0);
+        cairox_paint_arrow(cr, coordinates, 2, &ap);
+
+        coordinates[0].x = width/2.0  + 10 * cos(M_PI/6.0);
+        coordinates[0].y = height/2.0 + 25 + 10 * sin(M_PI/6.0);
+        coordinates[1].x = width/2.0  + 40 * cos(M_PI/6.0);
+        coordinates[1].y = height/2.0 + 25 + 40 * sin(M_PI/6.0);
+        coordinates[2].x = width/2.0  + 40 * cos(M_PI/6.0) + 400 * cos(M_PI/6.0);
+        coordinates[2].y = height/2.0 + 25 + 40 * sin(M_PI/6.0) - 400 * sin(M_PI/6.0);
+        coordinates[3].x = width/2.0  - 80 * cos(M_PI/6.0) + 400 * cos(M_PI/6.0);
+        coordinates[3].y = height/2.0 + 25 - 80 * sin(M_PI/6.0) - 400 * sin(M_PI/6.0);
+        coordinates[4].x = width/2.0  - 80 * cos(M_PI/6.0);
+        coordinates[4].y = height/2.0 + 25 - 80 * sin(M_PI/6.0);
+        coordinates[5].x = width/2.0  - 20 * cos(M_PI/6.0);
+        coordinates[5].y = height/2.0 + 25  - 20 * sin(M_PI/6.0);
+
+        cairox_paint_arrow(cr, coordinates, 6, &ap);
+
+
+
         /* Write the fixated object at the top left: */
 
         if (world_decode_viewed(buffer, 64, in_vector)) {
-            x = width/2.0 - (dl + 120 + 60) * cos(M_PI/6.0);
-            y = height/2.0 - 25 - (dl - 120 + 60) * sin(M_PI/6.0);
+            x = width/2.0 - (dl + 120 + 50) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl - 120 + 50) * sin(M_PI/6.0);
 
-            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 30.0);
             cairox_paint_pango_text(cr, &p, layout, "Fixated:");
-            cairox_text_parameters_set(&p, x, y+15, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y+15, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 30.0);
             cairox_paint_pango_text(cr, &p, layout, buffer);
+
+            // Draw a square bracket to show fixated units:
+            double x0, y0, x1, y1, dx, dy;
+            CairoxLineParameters lp;
+
+            cairox_line_parameters_set(&lp, 2, LS_SOLID, TRUE);
+
+            x = width/2.0 - (dl + 12.5*13 - 35) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl - 12.5*13 - 35) * sin(M_PI/6.0) - 55;
+            // 18 fixated units (plus width of 18th unit):
+            x0 = x - (19 * 6.0 * cos(M_PI/6.0));
+            y0 = y + (19 * 6.0 * sin(M_PI/6.0));
+            x1 = x + (19 * 6.0 * cos(M_PI/6.0));
+            y1 = y - (19 * 6.0 * sin(M_PI/6.0));
+
+            dx = 6 * cos(M_PI/6.0);
+            dy = 6 * sin(M_PI/6.0);
+
+            cairox_paint_line(cr, &lp, x0, y0, x1, y1);
+            cairox_paint_line(cr, &lp, x0+dx, y0+dy, x0, y0);
+            cairox_paint_line(cr, &lp, x1+dx, y1+dy, x1, y1);
         }
 
         if (in_vector[18] > 0.99) { /* The coffee instruction */
-            x = width/2.0 - (dl + 12 + 60) * cos(M_PI/6.0);
-            y = height/2.0 - 25 - (dl - 12 + 60) * sin(M_PI/6.0);
+            x = width/2.0 - (dl - 1.5*13 + 50) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl + 1.5*13 + 50) * sin(M_PI/6.0);
 
-            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_CENTER, 30.0);
             cairox_paint_pango_text(cr, &p, layout, "Do Coffee");
+            draw_arrow(cr, x+5*cos(M_PI/6.0), y+5*sin(M_PI/6.0), x+35*cos(M_PI/6.0), y+35*sin(M_PI/6.0));
         }
 
         if (in_vector[19] > 0.99) { /* The tea instruction */
-            x = width/2.0 - (dl - 12 + 60) * cos(M_PI/6.0);
-            y = height/2.0 - 25 - (dl + 12 + 60) * sin(M_PI/6.0);
+            x = width/2.0 - (dl - 2.5*13 + 50) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl + 2.5*13 + 50) * sin(M_PI/6.0);
 
-            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_CENTER, PANGOX_YALIGN_CENTER, 30.0);
             cairox_paint_pango_text(cr, &p, layout, "Do Tea");
+            draw_arrow(cr, x+5*cos(M_PI/6.0), y+5*sin(M_PI/6.0), x+35*cos(M_PI/6.0), y+35*sin(M_PI/6.0));
 	}
 
-        /* Write the help object at the middle left: */
+        /* Write the held object at the middle left: */
 
         if (world_decode_held(buffer, 64, in_vector)) {
-            x = width/2.0 - (dl - 120 + 60) * cos(M_PI/6.0);
-            y = height/2.0 - 25 - (dl + 120 + 60) * sin(M_PI/6.0);
+            x = width/2.0 - (dl - 120 + 50) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl + 120 + 50) * sin(M_PI/6.0);
 
-            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 30.0);
             cairox_paint_pango_text(cr, &p, layout, "Held:");
-            cairox_text_parameters_set(&p, x, y+15, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set(&p, x, y+15, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 30.0);
             cairox_paint_pango_text(cr, &p, layout, buffer);
+
+            // Draw a square bracket to show fixated units:
+            double x0, y0, x1, y1, dx, dy;
+            CairoxLineParameters lp;
+
+            cairox_line_parameters_set(&lp, 2, LS_SOLID, TRUE);
+
+            x = width/2.0 - (dl - 8.0*13 - 35) * cos(M_PI/6.0);
+            y = height/2.0 - 25 - (dl + 8.0*13 - 35) * sin(M_PI/6.0) - 55;
+            // 19 held units (plus width of 19th unit):
+            x0 = x - (20 * 6.0 * cos(M_PI/6.0));
+            y0 = y + (20 * 6.0 * sin(M_PI/6.0));
+            x1 = x + (20 * 6.0 * cos(M_PI/6.0));
+            y1 = y - (20 * 6.0 * sin(M_PI/6.0));
+
+            dx = 6 * cos(M_PI/6.0);
+            dy = 6 * sin(M_PI/6.0);
+
+            cairox_paint_line(cr, &lp, x0, y0, x1, y1);
+            cairox_paint_line(cr, &lp, x0+dx, y0+dy, x0, y0);
+            cairox_paint_line(cr, &lp, x1+dx, y1+dy, x1, y1);
         }
 
         /* Write the action in the bottom right: */

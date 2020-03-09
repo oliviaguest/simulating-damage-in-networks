@@ -23,12 +23,14 @@ typedef struct damage_details {
     char *format;
 } DamageDetails;
 
-static DamageDetails sc_dd[5] = {
+static DamageDetails sc_dd[7] = {
     {"Activation Noise (s.d.)",    10, { 0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.90,  1.00,  0.00}, "%4.2f"},
     {"CH Weight Noise (s.d.)",        10, { 0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.90,  1.00,  0.00}, "%4.2f"},
-    {"CH Connections Severed (proportion)", 11, { 0.10,  0.15,  0.20,  0.25,  0.30,  0.35,  0.40,  0.45,  0.50,  0.55,  0.60}, "%4.2f"},
+    {"CH Connections Severed (proportion)", 11, { 0.10,  0.15,  0.20,  0.25,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.90}, "%4.2f"},
     {"IH Weight Noise (s.d.)",        10, { 0.10,  0.20,  0.30,  0.40,  0.50,  0.60,  0.70,  0.80,  0.90,  1.00,  0.00}, "%4.2f"},
-    {"IH Connections Severed (proportion)", 11, { 0.10,  0.15,  0.20,  0.25,  0.30,  0.35,  0.40,  0.45,  0.50,  0.55,  0.60}, "%4.2f"}
+    {"IH Connections Severed (proportion)", 11, { 0.10,  0.15,  0.20,  0.25,  0.30,  0.35,  0.40,  0.45,  0.50,  0.55,  0.60}, "%4.2f"},
+    {"Context Units Removed (proportion)", 10, {0.000, 0.001, 0.003, 0.006, 0.009, 0.015, 0.050, 0.100, 0.200, 0.400, 0.000}, "%5.3f"},
+    {"Weight Scaling Factor (proportion)", 10, {1.00, 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00}, "%5.3f"}
 };
 
 extern void analyse_actions_with_acs1(TaskType *task, ACS1 *results);
@@ -226,6 +228,83 @@ static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int 
         sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
+
+static void sc_run_and_score_context_ablate(Network *net, TaskType *task, int i)
+{
+    double     *vector_in;
+    double     *vector_out;
+    ActionType  this[MAX_STEPS];
+    ACS1        results;
+    int         count = 0;
+
+    vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Ablate the context units: */
+    network_ablate_context(net, sc_dd[5].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &results);
+
+    sc_data[task->base][i][0] += results.actions;
+    if (results.actions > 0) {
+        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+    }
+}
+
+static void sc_run_and_score_weight_scale(Network *net, TaskType *task, int i)
+{
+    double     *vector_in;
+    double     *vector_out;
+    ActionType  this[MAX_STEPS];
+    ACS1        results;
+    int         count = 0;
+
+    vector_in = (double *)malloc(IN_WIDTH * sizeof(double));
+    vector_out = (double *)malloc(OUT_WIDTH * sizeof(double));
+    world_initialise(task);
+    network_tell_randomise_hidden_units(net);
+    /* Scale weights: */
+    network_scale_weights(net, sc_dd[6].level[i]);
+    do {
+	world_set_network_input_vector(vector_in);
+	network_tell_input(net, vector_in);
+	network_tell_propagate2(net);
+	network_ask_output(net, vector_out);
+	this[count] = world_get_network_output_action(NULL, vector_out);
+	world_perform_action(this[count]);
+    } while ((this[count] != ACTION_SAY_DONE) && (++count < MAX_STEPS));
+
+    free(vector_in);
+    free(vector_out);
+
+    /* Now score the actions: */
+
+    analyse_actions_with_acs1(task, &results);
+
+    sc_data[task->base][i][0] += results.actions;
+    if (results.actions > 0) {
+        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+    }
+}
+
 
 /*****************************************************************************/
 
@@ -499,6 +578,51 @@ static void independents_chart_step_callback(GtkWidget *mi, void *count)
                 }
             }
 	}
+        else if (sc_task.damage == DAMAGE_CONTEXT_ABLATE) {
+            Network *tmp_net;
+            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                if (sc_task.base == TASK_MAX) {
+                    sc_task.base = TASK_COFFEE;
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                    sc_task.base = TASK_TEA;
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                    sc_task.base = TASK_MAX;
+                }
+                else if (sc_task.base != TASK_NONE) {
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                }
+            }
+        }
+        else if (sc_task.damage == DAMAGE_WEIGHT_SCALE) {
+            Network *tmp_net;
+            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                if (sc_task.base == TASK_MAX) {
+                    sc_task.base = TASK_COFFEE;
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                    sc_task.base = TASK_TEA;
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                    sc_task.base = TASK_MAX;
+                }
+                else if (sc_task.base != TASK_NONE) {
+                    tmp_net = network_copy(xg.net);
+                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
+                    network_tell_destroy(tmp_net);
+                }
+            }
+        }
+        else {
+            fprintf(stdout, "WARNING: Damage type %d not implemented\n", sc_task.damage);
+        }
         sc_count++;
         independents_chart_expose(NULL, NULL, NULL);
     }
@@ -511,15 +635,16 @@ static void viewer_widget_snap_callback(GtkWidget *button, void *dummy)
         cairo_t *cr;
         char filename[64];
         int width = 700;
-        int height = 400;
+        int height = 350; // Was 400;
 
-        g_snprintf(filename, 64, "%schart_independents_%d.png", OUTPUT_FOLDER, (int) sc_task.damage);
+        g_snprintf(filename, 64, "%sbp_independents_%d.png", OUTPUT_FOLDER, (int) sc_task.damage);
         cairo_surface_write_to_png(viewer_surface, filename);
-
-        g_snprintf(filename, 64, "%schart_independents_%d.pdf", OUTPUT_FOLDER, (int) sc_task.damage);
+        fprintf(stdout, "Chart written to %s\n", filename);
+        g_snprintf(filename, 64, "%sbp_independents_%d.pdf", OUTPUT_FOLDER, (int) sc_task.damage);
         pdf_surface = cairo_pdf_surface_create(filename, width, height);
         cr = cairo_create(pdf_surface);
         independents_chart_write_to_cairo(cr, width, height);
+        fprintf(stdout, "Chart written to %s\n", filename);
         cairo_destroy(cr);
         cairo_surface_destroy(pdf_surface);
     }
@@ -568,6 +693,8 @@ void create_bp_independents_chart_viewer(GtkWidget *vbox)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[2].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[3].label);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[4].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[5].label);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(tmp), sc_dd[6].label);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), sc_task.damage - 1);
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     g_signal_connect(G_OBJECT(tmp), "changed", G_CALLBACK(set_damage_callback), NULL);
