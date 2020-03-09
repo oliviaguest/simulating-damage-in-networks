@@ -39,9 +39,9 @@
 typedef enum explore_mode_type {
     EXPLORE_SETTLE_NAME_FROM_VISUAL, EXPLORE_TABULATE_FROM_VISUAL,
     EXPLORE_TABULATE_FROM_VERBAL, EXPLORE_TABULATE_FROM_NAME,
-    EXPLORE_TABULATE_FROM_ALL, EXPLORE_ATTRACTOR_BAR_CHARTS, 
-    EXPLORE_ATTRACTOR_SIMILARITY, EXPLORE_ATTRACTOR_DENSITY,
-    EXPLORE_ATTRACTOR_DENDROGRAMS
+    EXPLORE_TABULATE_FROM_ALL, EXPLORE_WEIGHT_DISTRIBUTION,
+    EXPLORE_ATTRACTOR_BAR_CHARTS, EXPLORE_ATTRACTOR_SIMILARITY,
+    EXPLORE_ATTRACTOR_DENSITY, EXPLORE_ATTRACTOR_DENDROGRAMS
 } ExploreModeType;
 
 /* Local variables (globally accessible in this file): -----------------------*/
@@ -54,6 +54,9 @@ static cairo_surface_t  *explore_viewer_surface = NULL;
 static Network          *explore_network = NULL;
 static double            explore_disconnection_severity = 0.0;
 static double            explore_noise_sd = 0.0;
+// FIX ME: ADD INTERFACE FACILITIES TO ADJUST THE FOLLOWING TWO:
+static double            explore_ablation_severity = 0.0;
+static double            explore_weight_scaling = 1.0;
 static Boolean           explore_slow = TRUE;
 static Boolean           explore_colour = TRUE;
 static ExploreModeType   explore_mode = EXPLORE_SETTLE_NAME_FROM_VISUAL;
@@ -69,16 +72,18 @@ static GtkWidget        *explore_widget[11];
 static TableStruct      *explore_table_name_all = NULL;
 static GraphStruct      *explore_graph_categories[2] = {NULL, NULL};
 static GraphStruct      *explore_graph_domains[2] = {NULL, NULL};
+static GraphStruct      *explore_weight_histogram[3] = {NULL, NULL, NULL};
 static DendrogramStruct *explore_dendrogram = NULL;
 
 static MetricType        explore_metric = METRIC_JACCARD;
 static LinkageType       explore_linkage = LT_MEAN;
 static SimilarityType    explore_similarity = SIMILARITY_CORRELATION;
 
-static char *print_file_prefix[8] = 
+static char *print_file_prefix[10] = 
     {"settled_network", "settle_from_visual_table", "settle_from_verbal_table",
-     "settle_from_name_table", "settle_from_all_table",
-     "attractor_length", "attractor_similarity", "attractor_dendrogram"};
+     "settle_from_name_table", "settle_from_all_table", "weight_distribution",
+     "attractor_length", "attractor_similarity", "attractor_density", 
+     "attractor_dendrogram"};
 
 static char *category_name[CAT_MAX] = 
     {"Birds", "Mammals", "Fruits", "Tools", "Vehicles", "HH Objects"};
@@ -98,6 +103,14 @@ static char *metric_name[2] =
 
 static char *linkage_name[3] =
     {"Mean", "Maximum", "Minimum"};
+
+#define MAX_BINS 21
+
+typedef struct weight_statistics {
+    int pos_count, neg_count, zero_count;
+    double min, max, mean;
+    double bin_x[MAX_BINS], bin_y[MAX_BINS];
+} WeightStatistics;
 
 /******************************************************************************/
 
@@ -120,27 +133,34 @@ static void explore_initialise_attractor_similarity()
 static NamedVectorArray *retrieve_attractor_vectors(PatternList *patterns)
 {
     PatternList *p;
-    NamedVectorArray *list;
+    NamedVectorArray *list = NULL;
     ClampType clamp;
     int j = 0;
+    int width;
 
-    if ((list = (NamedVectorArray *)malloc(pattern_list_length(patterns) * sizeof(NamedVectorArray))) != NULL) {
-        for (p = patterns; p != NULL; p = p->next) {
-            if ((list[j].vector = (double *)malloc(NUM_SEMANTIC * sizeof(double))) != NULL) {
+    if (explore_network != NULL) {
+        if ((list = (NamedVectorArray *)malloc(pattern_list_length(patterns) * sizeof(NamedVectorArray))) != NULL) {
 
-                // Run the network with the pattern to get the attractor, then
-                /* Set up the clamp: */
-                clamp_set_clamp_visual(&clamp, 0, 3 * explore_network->params.ticks, p);
-                /* Initialise units to random values etc: */
-                network_initialise(explore_network);
-                do {
-                    network_tell_recirculate_input(explore_network, &clamp);
-                    network_tell_propagate(explore_network);
-                } while (!network_is_settled(explore_network));
+            // How many hidden units?
+            width = explore_network->hidden_width;
 
-                network_ask_hidden(explore_network, list[j].vector);
-                list[j].name = string_copy(p->name);
-                j++;
+            for (p = patterns; p != NULL; p = p->next) {
+                if ((list[j].vector = (double *)malloc(width * sizeof(double))) != NULL) {
+
+                    // Run the network with the pattern to get the attractor, then
+                    /* Set up the clamp: */
+                    clamp_set_clamp_visual(&clamp, 0, 3 * explore_network->params.ticks, p);
+                    /* Initialise units to random values etc: */
+                    network_initialise(explore_network);
+                    do {
+                        network_tell_recirculate_input(explore_network, &clamp);
+                        network_tell_propagate(explore_network);
+                    } while (!network_is_settled(explore_network));
+
+                    network_ask_hidden(explore_network, list[j].vector);
+                    list[j].name = string_copy(p->name);
+                    j++;
+                }
             }
         }
     }
@@ -162,7 +182,9 @@ static void regenerate_attractor_dendrogram(XGlobals *xg)
     }
 
     if ((list = retrieve_attractor_vectors(xg->pattern_set)) != NULL) {
-        explore_dendrogram = dendrogram_create(list, NUM_SEMANTIC, pattern_list_length(xg->pattern_set), explore_metric, explore_linkage);
+        // How many hidden units?
+        int width = explore_network->hidden_width;
+        explore_dendrogram = dendrogram_create(list, width, pattern_list_length(xg->pattern_set), explore_metric, explore_linkage);
     }
     named_vector_array_free(list, pattern_list_length(xg->pattern_set));
 }
@@ -631,6 +653,199 @@ static void explore_viewer_repaint_attractor_dendrogram(cairo_t *cr, XGlobals *x
 
 /******************************************************************************/
 
+static WeightStatistics *calculate_weight_statistics(Network *net, int k)
+{
+    WeightStatistics *ws;
+
+    if ((ws = (WeightStatistics *)malloc(sizeof(WeightStatistics))) != NULL) {
+        int i, j, lim_i = 0, lim_j = 0, b;
+        double *weights = NULL, w;
+
+        ws->pos_count = 0;
+        ws->neg_count = 0;
+        ws->zero_count = 0;
+        ws->min = -1;
+        ws->max = +1;
+        ws->mean = 0;
+
+        for (b = 0; b < MAX_BINS; b++) {
+            ws->bin_x[b] = -2.5 + 5.0 * (b+0.5)/(double) MAX_BINS;
+            ws->bin_y[b] = 0.0;
+        }
+
+        if (k == 0) { // Visible to Hidden
+            weights = net->weights_ih;
+            lim_i = net->in_width;
+            lim_j = net->hidden_width;
+        }
+
+        if (k == 1) { // Hidden to Hidden
+            weights = net->weights_hh;
+            lim_i = net->hidden_width;
+            lim_j = net->hidden_width;
+        }
+
+        if (k == 2) { // Hidden to Visible
+            weights = net->weights_ho;
+            lim_i = net->hidden_width;
+            lim_j = net->out_width;
+        }
+
+        if (weights != NULL) {
+            ws->min = weights[0];
+            ws->max = weights[0];
+            ws->mean = 0;
+
+            for (i = 0; i < lim_i; i++) {
+                for (j = 0; j < lim_j; j++) {
+                    w = weights[i * lim_j + j];
+
+                    if (w > 0) {
+                        ws->pos_count++;
+                    }
+                    else if (w < 0) {
+                        ws->neg_count++;
+                    }
+                    else {
+                        ws->zero_count++;
+                    }
+                    ws->mean += w; // ws_mean is actually the sum of the weights
+                    if (ws->min > w) {
+                        ws->min = w;
+                    }
+                    if (ws->max < w) {
+                        ws->max = w;
+                    }
+
+                    /* Histograph data: */
+                    b = (int) ((w + 2.5) * MAX_BINS / 5.0);
+                    if (b < 0) {
+                        b = 0;
+                    }
+                    else if (b >= MAX_BINS) {
+                        b = MAX_BINS-1;
+                    }
+                    ws->bin_y[b]++;
+                }
+            }
+            ws->mean /= (double) (lim_i * lim_j); // divide by number of weights
+            for (b = 0; b < MAX_BINS; b++) {
+                ws->bin_y[b] /= (double) (lim_i * lim_j); 
+            }
+        }
+    }
+    return(ws);
+}
+
+void ftabulate_weight_statistics(FILE *fp, Network *net)
+{
+    if (fp != NULL) {
+        WeightStatistics *ws;
+        int k;
+
+        for (k = 0; k < 3; k++) {
+            if ((ws = calculate_weight_statistics(net, k)) != NULL) {
+                int total = ws->neg_count + ws->zero_count + ws->pos_count;
+                fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", k, ws->neg_count / (double) total, ws->pos_count / (double) total, ws->min, ws->max, ws->mean);
+                free(ws);
+            }
+        }
+    }
+}
+
+static void cairo_draw_weight_statistics(cairo_t *cr, PangoLayout *layout, WeightStatistics *ws, int y, char *header)
+{
+    CairoxTextParameters tp;
+    char buffer[128];
+    int total;
+
+    pangox_layout_set_font_size(layout, 14);
+
+    total = ws->pos_count+ws->neg_count+ws->zero_count;
+
+    g_snprintf(buffer, 128, "%s (N = %d):", header, total);
+    cairox_text_parameters_set(&tp, 50, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp,  50, y+25, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Positive:");
+    cairox_text_parameters_set(&tp, 150, y+25, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%5.3f", ws->pos_count / (double) total);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp, 170, y+25, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Negative:");
+    cairox_text_parameters_set(&tp, 270, y+25, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%5.3f", ws->neg_count / (double) total);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp, 290, y+25, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Zero:");
+    cairox_text_parameters_set(&tp, 390, y+25, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%5.3f", ws->zero_count / (double) total);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp,  50, y+50, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Min:");
+    cairox_text_parameters_set(&tp, 150, y+50, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%7.4f", ws->min);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp, 170, y+50, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Max:");
+    cairox_text_parameters_set(&tp, 270, y+50, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%7.4f", ws->max);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    cairox_text_parameters_set(&tp, 290, y+50, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, "Mean:");
+    cairox_text_parameters_set(&tp, 390, y+50, PANGOX_XALIGN_RIGHT, PANGOX_YALIGN_TOP, 0.0);
+    g_snprintf(buffer, 128, "%7.4f", ws->mean);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+}
+
+static void explore_viewer_repaint_weight_distribution(cairo_t *cr, XGlobals *xg)
+{
+    PangoLayout *layout;
+    CairoxTextParameters tp;
+    WeightStatistics *ws;
+    char *headings[3] = {"Visible to Hidden", "Hidden to Hidden", "Hidden to Visible"};
+    char buffer[64];
+    int width = explore_viewer_widget->allocation.width;
+    int k, b;
+
+    layout = pango_cairo_create_layout(cr);
+    pangox_layout_set_font_size(layout, 16);
+
+    g_snprintf(buffer, 64, "Weight Distribution (excluding bias weights)");
+    cairox_text_parameters_set(&tp, 50, 20, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_TOP, 0.0);
+    cairox_paint_pango_text(cr, &tp, layout, buffer);
+
+    for (k = 0; k < 3; k++) {
+        if ((ws = calculate_weight_statistics(explore_network, k)) != NULL) {
+            cairo_draw_weight_statistics(cr, layout, ws, 50 + k*175, headings[k]);
+            if (explore_weight_histogram[k] != NULL) {
+                /* Set the graph position: */
+                graph_set_extent(explore_weight_histogram[k], 400, k*175, width-420, 175);
+                /* Load the histogram data: */
+                for (b = 0; b < MAX_BINS; b++) {
+                    explore_weight_histogram[k]->dataset[0].x[b] = ws->bin_x[b];
+                    explore_weight_histogram[k]->dataset[0].y[b] = ws->bin_y[b];
+                    explore_weight_histogram[k]->dataset[0].se[b] = 0.0;
+                }
+                explore_weight_histogram[k]->dataset[0].points = MAX_BINS;
+                /* Draw the graph: */
+                cairox_draw_graph(cr, explore_weight_histogram[k], explore_colour);
+            }
+            free(ws);
+        }
+    }
+
+    g_object_unref(layout);
+}
+
+/******************************************************************************/
+
 static void explore_viewer_repaint_attractor_similarity_matrix(cairo_t *cr, XGlobals *xg)
 {
     PangoLayout *layout;
@@ -731,6 +946,11 @@ static Boolean explore_viewer_repaint(GtkWidget *caller, GdkEvent *event, XGloba
             gtkx_flush_events();
             explore_viewer_repaint_name_table(cr, xg);
         }
+        else if (explore_mode == EXPLORE_WEIGHT_DISTRIBUTION) {
+            gtk_widget_set_size_request(explore_viewer_widget, -1, -1);
+            gtkx_flush_events();
+            explore_viewer_repaint_weight_distribution(cr, xg);
+        }
         else if (explore_mode == EXPLORE_ATTRACTOR_BAR_CHARTS) {
             gtk_widget_set_size_request(explore_viewer_widget, -1, -1);
             gtkx_flush_events();
@@ -819,6 +1039,28 @@ static void explore_mode_activate_buttons()
         gtk_widget_hide(explore_widget[10]); // Density folder selector
         break;
     }
+    case EXPLORE_WEIGHT_DISTRIBUTION: {
+        gtk_widget_hide(explore_button[0]); // First pattern
+        gtk_widget_hide(explore_button[1]); // Step forward through patterns
+        gtk_widget_hide(explore_button[2]); // Execute / Settle
+        gtk_widget_hide(explore_button[3]); // Refresh test name all
+        gtk_widget_hide(explore_button[4]); // Refresh test attractors
+        gtk_widget_hide(explore_button[5]); // Refresh test attractor sim mat
+        gtk_widget_hide(explore_button[6]); // Refresh attractor density
+        gtk_widget_hide(explore_button[7]); // Refresh attractor dendrogram
+        gtk_widget_hide(explore_widget[0]); // "Slow" label
+        gtk_widget_hide(explore_widget[1]); // "Slow" checkbox
+        gtk_widget_hide(explore_widget[2]); // Dendrogram metric label
+        gtk_widget_hide(explore_widget[3]); // Dendrogram metric selector
+        gtk_widget_hide(explore_widget[4]); // Dendrogram linkage label
+        gtk_widget_hide(explore_widget[5]); // Dendrogram linkage selector
+        gtk_widget_show(explore_widget[6]); // Filler
+        gtk_widget_show(explore_widget[7]); // Colour label
+        gtk_widget_show(explore_widget[8]); // Colour checkbox
+        gtk_widget_hide(explore_widget[9]); // Density folder label
+        gtk_widget_hide(explore_widget[10]); // Density folder selector
+        break;
+    }
     case EXPLORE_ATTRACTOR_BAR_CHARTS: {
         gtk_widget_hide(explore_button[0]);
         gtk_widget_hide(explore_button[1]);
@@ -836,7 +1078,7 @@ static void explore_mode_activate_buttons()
         gtk_widget_hide(explore_widget[3]);
         gtk_widget_hide(explore_widget[4]);
         gtk_widget_hide(explore_widget[5]);
-        gtk_widget_hide(explore_widget[6]);
+        gtk_widget_hide(explore_widget[6]); // Filler
         gtk_widget_hide(explore_widget[7]); // Colour label
         gtk_widget_hide(explore_widget[8]); // Colour checkbox
         gtk_widget_hide(explore_widget[9]); // Density folder label
@@ -950,7 +1192,6 @@ static void test_name_all_callback(GtkWidget *caller, XGlobals *xg)
 
     for (p = xg->pattern_set; p != NULL; p = p->next) {
         double vector_io[NUM_IO];
-        double attractor[NUM_SEMANTIC];
 
         /* Set up the clamp: */
 
@@ -978,7 +1219,6 @@ static void test_name_all_callback(GtkWidget *caller, XGlobals *xg)
             network_tell_propagate(explore_network);
         } while (!network_is_settled(explore_network));
 
-        network_ask_hidden(explore_network, attractor);
         network_ask_output(explore_network, vector_io);
 
         table_cell_set_value_from_string(explore_table_name_all, j, 0, p->name);
@@ -1037,6 +1277,45 @@ static void test_name_all_callback(GtkWidget *caller, XGlobals *xg)
     explore_viewer_repaint(NULL, NULL, xg);
 }
 
+void ftabulate_naming_accuracy(FILE *fp, XGlobals *xg)
+{
+    /* Try the net on every pattern, given visual input, and record the error */
+    if (fp != NULL) {
+        PatternList *p;
+        double d, ne, me;
+        ClampType clamp;
+        int n = 0;
+
+        for (p = xg->pattern_set; p != NULL; p = p->next) {
+            double vector_io[NUM_IO];
+
+            /* Set up the clamp: */
+
+            table_set_title(explore_table_name_all, "Error by Pattern (Naming from Visual Input)");
+            clamp_set_clamp_visual(&clamp, 0, 3 * explore_network->params.ticks, p);
+            /* Initialise units to random values etc: */
+            network_initialise(xg->net);
+            do {
+                network_tell_recirculate_input(xg->net, &clamp);
+                network_tell_propagate(xg->net);
+            } while (!network_is_settled(xg->net));
+
+            network_ask_output(xg->net, vector_io);
+
+            d = pattern_get_distance(p, vector_io);
+            ne = pattern_get_name_distance(p, vector_io);
+            me = pattern_get_max_bit_error(p, vector_io);
+
+            if (pattern_is_animal(p)) {
+                fprintf(fp, "%d 0 %d %f %f %f\n", n++, (int) p->category, d, ne, me);
+            }
+            if (pattern_is_artifact(p)){
+                fprintf(fp, "%d 1 %d %f %f %f\n", n++, (int) p->category, d, ne, me);
+            }
+        }
+    }
+}
+
 /*----------------------------------------------------------------------------*/
 
 static void test_attractors_callback(GtkWidget *caller, XGlobals *xg)
@@ -1054,10 +1333,12 @@ static void test_attractors_callback(GtkWidget *caller, XGlobals *xg)
 
     for (i = 0; i < CAT_MAX; i++) {
         sum_cat[i] = 0;
+        ssq_cat[i] = 0;
         count_cat[i] = 0;
     }
     for (i = 0; i < DOM_MAX; i++) {
         sum_dom[i] = 0;
+        ssq_dom[i] = 0;
         count_dom[i] = 0;
     }
 
@@ -1282,6 +1563,14 @@ static void damage_net_callback(GtkWidget *caller, XGlobals *xg)
     if (explore_disconnection_severity > 0.0) {
         network_sever_weights(explore_network, explore_disconnection_severity);
     }
+    if (explore_ablation_severity > 0.0) {
+        network_ablate_units(explore_network, explore_ablation_severity);
+    }
+    if (explore_weight_scaling < 1.0) {
+        network_scale_weights(explore_network, explore_weight_scaling);
+    }
+
+    explore_viewer_repaint(NULL, NULL, xg);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1289,6 +1578,7 @@ static void damage_net_callback(GtkWidget *caller, XGlobals *xg)
 static void reinstate_net_callback(GtkWidget *caller, XGlobals *xg)
 {
     hub_explore_initialise_network(xg);
+    explore_viewer_repaint(NULL, NULL, xg);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1359,7 +1649,7 @@ static void xexplore_print_callback(GtkWidget *caller, XGlobals *xg)
     g_snprintf(prefix, 64, "%s_%s", xg->pattern_set_name, print_file_prefix[(int) explore_mode]);
 
     /* PDF version: */
-    g_snprintf(filename, 128, "FIGURES/%s.pdf", prefix);
+    g_snprintf(filename, 128, "%s/%s.pdf", PRINT_FOLDER, prefix);
     surface = cairo_pdf_surface_create(filename, width, height);
     cr = cairo_create(surface);
     layout = pango_cairo_create_layout(cr);
@@ -1395,7 +1685,7 @@ static void xexplore_print_callback(GtkWidget *caller, XGlobals *xg)
     cairo_destroy(cr);
 
     /* Save the PNG while we're at it: */
-    g_snprintf(filename, 128, "FIGURES/%s.png", prefix);
+    g_snprintf(filename, 128, "%s/%s.png", PRINT_FOLDER, prefix);
     cairo_surface_write_to_png(surface, filename);
     /* And destroy the surface */
     cairo_surface_destroy(surface);
@@ -1459,6 +1749,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
     GtkWidget *tmp, *hbox;
     GtkWidget *scrolled_win;
     CairoxFontProperties *fp;
+    int k;
 
     fp = font_properties_create("Sans", 18, PANGO_STYLE_NORMAL, PANGO_WEIGHT_NORMAL, "black");
 
@@ -1491,7 +1782,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
         graph_set_axis_properties(explore_graph_categories[0], GTK_ORIENTATION_HORIZONTAL, -0.5, CAT_MAX-0.5, 2*CAT_MAX+1, "%s", "Categories");
         graph_set_axis_tick_marks(explore_graph_categories[0], GTK_ORIENTATION_HORIZONTAL, 2*CAT_MAX+1, cat_labels);
         graph_set_axis_properties(explore_graph_categories[0], GTK_ORIENTATION_VERTICAL, 3, 7, 5, "%3.1f", "Euclidean Length");
-        graph_set_dataset_properties(explore_graph_categories[0], 0, NULL, 0.5, 0.5, 0.5, 25, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(explore_graph_categories[0], 0, NULL, 0.5, 0.5, 0.5, 1.0, 25, LS_SOLID, MARK_NONE);
         font_properties_set_size(fp, 14);
         graph_set_axis_font_properties(explore_graph_categories[0], GTK_ORIENTATION_HORIZONTAL, fp);
         graph_set_axis_font_properties(explore_graph_categories[0], GTK_ORIENTATION_VERTICAL, fp);
@@ -1511,7 +1802,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
 #else
         graph_set_axis_properties(explore_graph_categories[1], GTK_ORIENTATION_VERTICAL, 0.0, 10.0, 6, "%3.1f", "Euclidean Distance");
 #endif
-        graph_set_dataset_properties(explore_graph_categories[1], 0, NULL, 0.5, 0.5, 0.5, 25, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(explore_graph_categories[1], 0, NULL, 0.5, 0.5, 0.5, 1.0, 25, LS_SOLID, MARK_NONE);
         font_properties_set_size(fp, 14);
         graph_set_axis_font_properties(explore_graph_categories[1], GTK_ORIENTATION_HORIZONTAL, fp);
         graph_set_axis_font_properties(explore_graph_categories[1], GTK_ORIENTATION_VERTICAL, fp);
@@ -1527,7 +1818,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
         graph_set_axis_properties(explore_graph_domains[0], GTK_ORIENTATION_HORIZONTAL, -0.5, 1.5, 5, "%s", "Domains");
         graph_set_axis_tick_marks(explore_graph_domains[0], GTK_ORIENTATION_HORIZONTAL, 5, dom_labels);
         graph_set_axis_properties(explore_graph_domains[0], GTK_ORIENTATION_VERTICAL, 3, 7, 5, "%3.1f", "Euclidean Length");
-        graph_set_dataset_properties(explore_graph_domains[0], 0, NULL, 0.5, 0.5, 0.5, 50, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(explore_graph_domains[0], 0, NULL, 0.5, 0.5, 0.5, 1.0, 50, LS_SOLID, MARK_NONE);
         font_properties_set_size(fp, 14);
         graph_set_axis_font_properties(explore_graph_domains[0], GTK_ORIENTATION_HORIZONTAL, fp);
         graph_set_axis_font_properties(explore_graph_domains[0], GTK_ORIENTATION_VERTICAL, fp);
@@ -1546,11 +1837,28 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
 #else
         graph_set_axis_properties(explore_graph_domains[1], GTK_ORIENTATION_VERTICAL, 0.0, 10.0, 6, "%3.1f", "Euclidean Distance");
 #endif
-        graph_set_dataset_properties(explore_graph_domains[1], 0, NULL, 0.5, 0.5, 0.5, 50, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(explore_graph_domains[1], 0, NULL, 0.5, 0.5, 0.5, 1.0, 50, LS_SOLID, MARK_NONE);
         font_properties_set_size(fp, 14);
         graph_set_axis_font_properties(explore_graph_domains[1], GTK_ORIENTATION_HORIZONTAL, fp);
         graph_set_axis_font_properties(explore_graph_domains[1], GTK_ORIENTATION_VERTICAL, fp);
         graph_set_legend_font_properties(explore_graph_domains[1], fp);
+    }
+
+    for (k = 0; k < 3; k++) {
+        if (explore_weight_histogram[k] == NULL) {
+            // Create histogram of visible to hidden weights:
+            explore_weight_histogram[k] = graph_create(1);
+            graph_set_margins(explore_weight_histogram[k], 50, 10, 25, 40);
+            font_properties_set_size(fp, 18);
+            graph_set_title_font_properties(explore_weight_histogram[k], fp);
+            graph_set_axis_properties(explore_weight_histogram[k], GTK_ORIENTATION_HORIZONTAL, -2.5, 2.5, 6, "%+3.1f", "Weight");
+            graph_set_axis_properties(explore_weight_histogram[k], GTK_ORIENTATION_VERTICAL, 0.0, 0.5, 6, "%3.1f", "Rel. Freq.");
+            graph_set_dataset_properties(explore_weight_histogram[k], 0, NULL, 1.0, 0.0, 0.0, 1.0, 0, LS_SOLID, MARK_NONE);
+            font_properties_set_size(fp, 14);
+            graph_set_axis_font_properties(explore_weight_histogram[k], GTK_ORIENTATION_HORIZONTAL, fp);
+            graph_set_axis_font_properties(explore_weight_histogram[k], GTK_ORIENTATION_VERTICAL, fp);
+            graph_set_legend_font_properties(explore_weight_histogram[k], fp);
+        }
     }
 
     font_properties_destroy(fp);
@@ -1578,6 +1886,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Tabulate (from Verbal)");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Tabulate (from Name)");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Tabulate (from All)");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Weight Distribution");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Attractor Bar Charts");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Attractor Similarity");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Attractor Density");
@@ -1638,7 +1947,7 @@ void hub_explore_create_widgets(GtkWidget *page, XGlobals *xg)
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 0);
     gtk_widget_show(tmp);
 
-    gtkx_stock_image_button_create(hbox, GTK_STOCK_CUT, G_CALLBACK(damage_net_callback), xg);
+    gtkx_stock_image_button_create(hbox, GTK_STOCK_APPLY, G_CALLBACK(damage_net_callback), xg); // WAS GTK_STOCK_CUT
     gtkx_stock_image_button_create(hbox, GTK_STOCK_REVERT_TO_SAVED, G_CALLBACK(reinstate_net_callback), xg);
 
     /*--- Filler: ---*/

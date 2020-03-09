@@ -283,6 +283,101 @@ void network_perturb_weights(Network *net, double noise_sd)
     network_perturb_weights_ho(net, noise_sd);
 }
 
+/*----------------------------------------------------------------------------*/
+
+void network_ablate_units(Network *n, double severity)
+{
+    int i, j;
+
+    if (n->weights_hh != NULL) { // For RAN only
+        for (i = 0; i < n->hidden_width; i++) { // No hidden to hidden bias to worry about
+            if (random_uniform(0.0, 1.0) < severity) {
+                for (j = 0; j < n->hidden_width; j++) {
+                    n->weights_hh[i * n->hidden_width + j] = 0.0;
+                }
+            }
+        }
+    }
+
+    if (n->weights_ho != NULL) {
+        for (i = 0; i < n->hidden_width; i++) { // Don't lesion the bias!
+            if (random_uniform(0.0, 1.0) < severity) {
+                for (j = 0; j < n->out_width; j++) {
+                    n->weights_ho[i * n->out_width + j] = 0.0;
+                }
+            }
+        }
+#ifdef BIAS_LESION
+	i = n->hidden_width;
+        if (random_uniform(0.0, 1.0) < severity) {
+            for (j = 0; j < n->out_width; j++) {
+                n->weights_ho[i * n->out_width + j] = 0.0;
+            }
+        }
+#endif
+    }
+}
+
+/*----------------------------------------------------------------------------*/
+
+void network_scale_weights_ih(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_ih != NULL) {
+        for (i = 0; i < n->in_width; i++) { // Don't lesion the bias!
+            for (j = 0; j < n->hidden_width; j++) {
+                n->weights_ih[i * n->hidden_width + j] *= scale;
+            }
+        }
+#ifdef BIAS_LESION
+	i = n->in_width;
+        for (j = 0; j < n->hidden_width; j++) {
+            n->weights_ih[i * n->hidden_width + j] *= scale;
+        }
+#endif
+    }
+}
+
+void network_scale_weights_hh(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_hh != NULL) { // For RAN only
+        for (i = 0; i < n->hidden_width; i++) { // No hidden to hidden bias to worry about
+            for (j = 0; j < n->hidden_width; j++) {
+                n->weights_hh[i * n->hidden_width + j] *= scale;
+            }
+        }
+    }
+}
+
+void network_scale_weights_ho(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_ho != NULL) {
+        for (i = 0; i < n->hidden_width; i++) { // Don't lesion the bias!
+            for (j = 0; j < n->out_width; j++) {
+                n->weights_ho[i * n->out_width + j] *= scale;
+            }
+        }
+#ifdef BIAS_LESION
+	i = n->hidden_width;
+        for (j = 0; j < n->out_width; j++) {
+            n->weights_ho[i * n->out_width + j] *= scale;
+        }
+#endif
+    }
+}
+
+void network_scale_weights(Network *net, double scale)
+{
+    network_scale_weights_ih(net, scale);
+    network_scale_weights_hh(net, scale);
+    network_scale_weights_ho(net, scale);
+}
+
 /******************************************************************************/
 
 static double vector_compare(ErrorFunction ef, int width, double *v1, double *v2)

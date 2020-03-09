@@ -29,7 +29,7 @@ typedef enum vertex_style {
 } VertexStyle;
 
 typedef enum line_style {
-    LS_SOLID, LS_DASHED, LS_DOTTED
+    LS_SOLID, LS_DASHED, LS_DOTTED, LS_NONE
 } LineStyle;
 
 typedef enum {

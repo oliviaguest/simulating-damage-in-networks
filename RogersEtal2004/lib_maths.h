@@ -1,6 +1,6 @@
-#ifndef _lib_math_h_
+#ifndef _lib_maths_h_
 
-#define _lib_math_h_
+#define _lib_maths_h_
 
 extern double random_uniform(double low, double high);
 extern double random_normal(double mean, double sd);

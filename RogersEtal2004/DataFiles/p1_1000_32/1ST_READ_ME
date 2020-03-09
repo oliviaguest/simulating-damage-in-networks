@@ -1,0 +1,2 @@
+The weights in this folder where generated from PDP-Tool with 1000 epochs,
+but with only 32 hidden / semantic units (half the standard model).

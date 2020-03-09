@@ -26,6 +26,9 @@ TO DO: Move the bulk of this to xhub.c and put the rest in xhub_parameters.c
 #define PATTERN_SET "DataFiles/p1_1000/Patterns P1.pat"
 #define WEIGHT_FILE "DataFiles/p1_1000/01.wgt"
 
+// File for saving patterns in a format for the Tyler et al. model
+#define PATTERN_SAVE_FILE "../hub_patterns.pat"
+
 /******************************************************************************/
 /* Callback to load a set of patterns/sequences *******************************/
 
@@ -94,6 +97,58 @@ static void select_training_file(GtkWidget *w, GtkWidget *chooser)
     g_snprintf(buffer, 128, "%d item(s) read from %s", reload_training_data(xg, file), file);
     gtkx_warn(chooser, buffer);
     gtk_widget_destroy(chooser);
+}
+
+/*----------------------------------------------------------------------------*/
+
+static void write_pattern_to_fp(FILE *fp, PatternList *tmp)
+{
+    int i;
+
+    for (i = 0; i < NUM_NAME; i++) {
+        fprintf(fp, "%3.1f ", tmp->name_features[i]);
+    }
+    for (i = 0; i < NUM_VERBAL; i++) {
+        fprintf(fp, "%3.1f ", tmp->verbal_features[i]);
+    }
+    for (i = 0; i < NUM_VISUAL; i++) {
+        fprintf(fp, "%3.1f ", tmp->visual_features[i]);
+    }
+    fprintf(fp, ">");
+    for (i = 0; i < NUM_NAME; i++) {
+        fprintf(fp, " %3.1f", tmp->name_features[i]);
+    }
+    for (i = 0; i < NUM_VERBAL; i++) {
+        fprintf(fp, " %3.1f", tmp->verbal_features[i]);
+    }
+    for (i = 0; i < NUM_VISUAL; i++) {
+        fprintf(fp, " %3.1f", tmp->visual_features[i]);
+    }
+    fprintf(fp, "\n");
+}
+
+static void write_patterns_callback(GtkWidget *mi, XGlobals *xg)
+{
+#if FALSE
+    GtkWidget *chooser = gtk_file_selection_new("Select training file");
+    g_object_set_data(G_OBJECT(chooser), "globals", xg);
+    gtk_file_selection_hide_fileop_buttons(GTK_FILE_SELECTION(chooser));
+    g_signal_connect(G_OBJECT(GTK_FILE_SELECTION(chooser)->ok_button), "clicked", G_CALLBACK(select_training_file), chooser);
+    g_signal_connect_swapped(G_OBJECT(GTK_FILE_SELECTION(chooser)->cancel_button), "clicked", G_CALLBACK(gtk_widget_destroy), chooser);
+    gtkx_position_popup(xg->frame, chooser);
+    gtk_widget_show(chooser);
+#endif
+
+    FILE *fp;
+    PatternList *tmp;
+
+    if ((fp = fopen(PATTERN_SAVE_FILE, "w")) != NULL) {
+        for (tmp = xg->pattern_set; tmp != NULL; tmp = tmp->next) {
+            write_pattern_to_fp(fp, tmp);
+        }
+        fclose(fp);
+        fprintf(stdout, "Patterns written to %s\n", PATTERN_SAVE_FILE);
+    }    
 }
 
 /*----------------------------------------------------------------------------*/
@@ -302,8 +357,13 @@ void populate_weight_history_page(GtkWidget *page, XGlobals *xg)
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);
 
-    tmp = gtk_button_new_with_label("  Load  ");
+    tmp = gtk_button_new_with_label("  Load...  ");
     g_signal_connect(G_OBJECT(tmp), "clicked", G_CALLBACK(load_patterns_callback), xg);
+    gtk_box_pack_end(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
+    gtk_widget_show(tmp);
+
+    tmp = gtk_button_new_with_label(" Save as... ");
+    g_signal_connect(G_OBJECT(tmp), "clicked", G_CALLBACK(write_patterns_callback), xg);
     gtk_box_pack_end(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);
 
@@ -332,12 +392,12 @@ void populate_weight_history_page(GtkWidget *page, XGlobals *xg)
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);
 
-    tmp = gtk_button_new_with_label("  Save  ");
+    tmp = gtk_button_new_with_label(" Save as... ");
     g_signal_connect(G_OBJECT(tmp), "clicked", G_CALLBACK(save_weights_callback), xg);
     gtk_box_pack_end(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);
 
-    tmp = gtk_button_new_with_label("  Load  ");
+    tmp = gtk_button_new_with_label("  Load...  ");
     g_signal_connect(G_OBJECT(tmp), "clicked", G_CALLBACK(load_weights_callback), xg);
     gtk_box_pack_end(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);

@@ -7,10 +7,10 @@
 #include <math.h>
 #include "lib_error.h"
 
-#define NUM_NAME     40
-#define NUM_VERBAL  112
-#define NUM_VISUAL   64
-#define NUM_SEMANTIC 64
+#define NUM_NAME      40
+#define NUM_VERBAL   112
+#define NUM_VISUAL    64
+#define NUM_SEMANTIC  64
 
 #define NUM_IO (NUM_NAME + NUM_VERBAL + NUM_VISUAL)
 

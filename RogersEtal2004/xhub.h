@@ -34,4 +34,9 @@ extern void hub_lesion_create_widgets(GtkWidget *page, XGlobals *xg);
 
 extern void hub_explore_initialise_network(XGlobals *xg);
 
+extern void ftabulate_weight_statistics(FILE *fp, Network *net);
+extern void ftabulate_naming_accuracy(FILE *fp, XGlobals *xg);
+
+#define PRINT_FOLDER "FIGURES"
+
 #endif

@@ -17,6 +17,7 @@ typedef struct graph_data_set {
     double r;
     double g;
     double b;
+    double alpha;
     LineStyle style;
     MarkerType mark;
 } GraphDataSet;
@@ -59,7 +60,7 @@ extern void graph_set_title_font_properties(GraphStruct *gd, CairoxFontPropertie
 extern void graph_set_axis_tick_marks(GraphStruct *gd, GtkOrientation orientation, int i, char **labels);
 extern void graph_set_axis_properties(GraphStruct *gd, GtkOrientation orientation, double min, double max, int ticks, char *format, char *label);
 extern void graph_set_axis_font_properties(GraphStruct *gd, GtkOrientation orientation, CairoxFontProperties *fp);
-extern void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r, double g, double b, int bar_width, LineStyle style, MarkerType mark);
+extern void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r, double g, double b, double a, int bar_width, LineStyle style, MarkerType mark);
 extern void graph_set_legend_properties(GraphStruct *gd, Boolean show, double x, double y, char *label);
 extern void graph_set_legend_font_properties(GraphStruct *gd, CairoxFontProperties *fp);
 

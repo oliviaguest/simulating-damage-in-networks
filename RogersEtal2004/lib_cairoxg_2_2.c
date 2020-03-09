@@ -247,13 +247,14 @@ void graph_set_legend_properties(GraphStruct *gd, Boolean show, double x, double
 
 /*----------------------------------------------------------------------------*/
 
-void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r, double g, double b, int bar_width, LineStyle style, MarkerType mark)
+void graph_set_dataset_properties(GraphStruct *gd, int l, char *label, double r, double g, double b, double alpha, int bar_width, LineStyle style, MarkerType mark)
 {
     if (gd != NULL) {
         gd->dataset[l].label = string_copy(label);
         gd->dataset[l].r = r;
         gd->dataset[l].g = g;
         gd->dataset[l].b = b;
+        gd->dataset[l].alpha = alpha;
         gd->dataset[l].bar_width = bar_width;
         gd->dataset[l].style = style;
         gd->dataset[l].mark = mark;
@@ -405,14 +406,14 @@ static void cairoxg_draw_axis_labels(cairo_t *cr, PangoLayout *layout, GraphStru
 static void cairoxg_dataset_set_colour(cairo_t *cr, GraphStruct *gd, int l, Boolean colour)
 {
     if (colour) {
-        cairo_set_source_rgb(cr, gd->dataset[l].r, gd->dataset[l].g, gd->dataset[l].b);
+        cairo_set_source_rgba(cr, gd->dataset[l].r, gd->dataset[l].g, gd->dataset[l].b, gd->dataset[l].alpha);
     }
     else if (gd->dataset[l].bar_width > 0) { // Black/white bar data - use a shade or grey:
         double grey = (gd->dataset[l].r + gd->dataset[l].g + gd->dataset[l].b) / 3.0;
-        cairo_set_source_rgb(cr, grey, grey, grey);
+        cairo_set_source_rgba(cr, grey, grey, grey, gd->dataset[l].alpha);
     }
     else { // Black/white line data - use black:
-        cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+        cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, gd->dataset[l].alpha);
     }
 }
 
@@ -427,7 +428,7 @@ static void cairoxg_dataset_set_style(cairo_t *cr, GraphStruct *gd, int l)
     else if (gd->dataset[l].style == LS_DASHED) {
         cairo_set_dash(cr, dashes, 2, 0);
     }
-    else {
+    else if (gd->dataset[l].style == LS_SOLID) {
         cairo_set_dash(cr, NULL, 0, 0);
     }
 }
@@ -491,7 +492,7 @@ static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *
             cairox_paint_pango_text(cr, &tp, layout, buffer);
         }
     }
-    else { /* Show the data as a line: */
+    else if (gd->dataset[l].style != LS_NONE) { /* Show the data as a line: */
         if (gd->dataset[l].points > 1) {
             i = 0;
             // First draw a continuous line from left to right:
@@ -580,7 +581,7 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
     }
 
     for (i = 0; i < gd->datasets; i++) {
-        if (gd->dataset[i].points > 0) {
+        if ((gd->dataset[i].points > 0) && (gd->dataset[i].label != NULL)) {
             y = y + line_sep;
             // set the colour/shade and draw
             cairoxg_dataset_set_colour(cr, gd, i, colour);
@@ -595,13 +596,12 @@ static void cairoxg_draw_legend(cairo_t *cr, PangoLayout *layout, GraphStruct *g
                 cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
                 cairo_stroke(cr);
             }
-            if (gd->dataset[i].label != NULL) {
-                cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
-                cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
-                cairox_paint_pango_text(cr, &tp, layout, gd->dataset[i].label);
-                entry_width = pangox_layout_get_string_width(layout, gd->dataset[i].label);
-                legend_width = MAX(legend_width, entry_width + 4 + 29);
-            }
+
+            cairox_text_parameters_set(&tp, x+29, y, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_BOTTOM, 0.0);
+            cairox_text_parameters_set_colour(&tp, gd->legend_font.colour);
+            cairox_paint_pango_text(cr, &tp, layout, gd->dataset[i].label);
+            entry_width = pangox_layout_get_string_width(layout, gd->dataset[i].label);
+            legend_width = MAX(legend_width, entry_width + 4 + 29);
         }
     }
 

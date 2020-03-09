@@ -251,6 +251,19 @@ Boolean pattern_is_artifact(PatternList *p)
     return((p->category == CAT_TOOL) || (p->category == CAT_VEHICLE) || (p->category == CAT_HOUSEHOLD));
 }
 
+double pattern_get_name_distance(PatternList *best, double *vector)
+{
+    double ssq = 0;
+    int i;
+
+    if (best != NULL) {
+        for (i = 0; i < NUM_NAME; i++) {
+            ssq += squared(best->name_features[i] - vector[i]);
+        }
+    }
+    return(sqrt(ssq));
+}
+
 double pattern_get_distance(PatternList *best, double *vector)
 {
     double ssq = 0;
@@ -907,6 +920,91 @@ void network_perturb_weights(Network *net, double noise_sd)
     network_perturb_weights_ih(net, noise_sd);
     network_perturb_weights_hh(net, noise_sd);
     network_perturb_weights_ho(net, noise_sd);
+}
+
+/******************************************************************************/
+
+void network_scale_weights_ih(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_ih != NULL) {
+        for (i = 0; i < n->in_width; i++) { // Don't lesion the bias!
+            for (j = 0; j < n->hidden_width; j++) {
+                n->weights_ih[i * n->hidden_width + j] *= scale;
+            }
+        }
+#ifdef BIAS_LESION
+	i = n->in_width;
+        for (j = 0; j < n->hidden_width; j++) {
+            n->weights_ih[i * n->hidden_width + j] *= scale;
+        }
+#endif
+    }
+}
+
+void network_scale_weights_hh(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_hh != NULL) { // For SRN only
+        for (i = 0; i < n->hidden_width; i++) { // No hidden to hidden bias to worry about
+            for (j = 0; j < n->hidden_width; j++) {
+                n->weights_hh[i * n->hidden_width + j] *= scale;
+            }
+        }
+    }
+}
+
+void network_scale_weights_ho(Network *n, double scale)
+{
+    int i, j;
+
+    if (n->weights_ho != NULL) {
+        for (i = 0; i < n->hidden_width; i++) { // Don't lesion the bias!
+            for (j = 0; j < n->out_width; j++) {
+                n->weights_ho[i * n->out_width + j] *= scale;
+            }
+        }
+#ifdef BIAS_LESION
+	i = n->hidden_width;
+        for (j = 0; j < n->out_width; j++) {
+            n->weights_ho[i * n->out_width + j] *= scale;
+        }
+#endif
+    }
+}
+
+void network_scale_weights(Network *net, double scale)
+{
+    network_scale_weights_ih(net, scale);
+    network_scale_weights_hh(net, scale);
+    network_scale_weights_ho(net, scale);
+}
+
+/******************************************************************************/
+
+void network_ablate_units(Network *n, double severity)
+{
+    int i, j;
+
+// fprintf(stdout, "Ablate HH units  at %f severity\n", severity);
+
+    for (i = 0; i < n->hidden_width; i++) {
+        // Excise the unit, if chance says so:
+        if (random_uniform(0.0, 1.0) < severity) {
+            // Set all weights from this unit to other hidden units zero:
+            if (n->weights_hh != NULL) { // For SRN only
+                for (j = 0; j < n->hidden_width; j++) {
+                    n->weights_hh[i * n->hidden_width + j] = 0.0;
+                }
+            }
+            // Set all weights from this unit to outptu units to zero:
+            for (j = 0; j < n->out_width; j++) {
+                n->weights_ho[i * n->out_width + j] = 0.0;
+            }
+        }
+    }
 }
 
 /******************************************************************************/

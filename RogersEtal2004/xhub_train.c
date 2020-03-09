@@ -206,14 +206,14 @@ static void xhub_train_print_callback(GtkWidget *caller, XGlobals *xg)
     g_snprintf(prefix, 64, "training_%s", xg->pattern_set_name);
 
     /* PDF version: */
-    g_snprintf(filename, 128, "FIGURES/%s.pdf", prefix);
+    g_snprintf(filename, 128, "%s/%s.pdf", PRINT_FOLDER, prefix);
     surface = cairo_pdf_surface_create(filename, width, height);
     cr = cairo_create(surface);
     xhub_train_viewer_paint_to_cairo(cr, width, height);
     cairo_destroy(cr);
 
     /* Save the PNG while we're at it: */
-    g_snprintf(filename, 128, "FIGURES/%s.png", prefix);
+    g_snprintf(filename, 128, "%s/%s.png", PRINT_FOLDER, prefix);
     cairo_surface_write_to_png(surface, filename);
     /* And destroy the surface */
     cairo_surface_destroy(surface);

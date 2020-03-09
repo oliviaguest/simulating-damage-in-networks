@@ -26,12 +26,20 @@ static float artifact_error[MAX_NETWORKS][MAX_POINTS];
 // Use 5.0 if uniformly distributed:
 // #define MAX_NOISE 5.00
 
+#define MAX_ABLATE 1.00
+#define MAX_SCALE 1.00
+
 static GtkWidget *viewer = NULL; // The drawing area
 
 static int graph_id = 0;
 static GraphStruct *gd = NULL;
 
 static Boolean paused;
+
+static char *dump_file_prefix[4] = {"zero",
+                                    "noise",
+                                    "ablate",
+                                    "scale"};
 
 /******************************************************************************/
 
@@ -44,8 +52,14 @@ static void lesion_viewer_paint_to_cairo(cairo_t *cr, GraphStruct *gd, double w,
     if (lesion_type == 0) {
         graph_set_axis_properties(gd, GTK_ORIENTATION_HORIZONTAL, 0, 100*MAX_DAMAGE, 11, "%2.0f%%", "Percentage of severed connections");
     }
-    else {
+    else if (lesion_type == 1) {
         graph_set_axis_properties(gd, GTK_ORIENTATION_HORIZONTAL, 0, MAX_NOISE, 11, "%3.1f", "Noise on weights (SD)");
+    }
+    else if (lesion_type == 2) {
+        graph_set_axis_properties(gd, GTK_ORIENTATION_HORIZONTAL, 0, MAX_NOISE, 11, "%3.1f", "Percentage of units removed");
+    }
+    else if (lesion_type == 3) {
+        graph_set_axis_properties(gd, GTK_ORIENTATION_HORIZONTAL, 0, MAX_NOISE, 11, "%3.1f", "Scaling of weights");
     }
     switch (graph_id) {
         case 0: { // Fig 3: Animals versus Artefacts / Distinctive
@@ -420,16 +434,24 @@ static void generate_lesion_data(XGlobals *xg)
         fprintf(stdout, " Error: %7.5f\n", sqrt(network_test(my_net, xg->training_set, SUM_SQUARE_ERROR))); fflush(stdout);
 
         for (i = 0; i < MAX_POINTS; i++) {
-            double ll;
+            double ll = 0.0;
             tmp = network_copy(my_net);
 
             if (xg->lesion_type == 0) {
                 ll = 100 * i * MAX_DAMAGE / (double) (MAX_POINTS - 1);
                 network_lesion_weights(tmp, ll / 100.0);
             }
-            else {
+            else if (xg->lesion_type == 1) {
                 ll = i * MAX_NOISE / (double) (MAX_POINTS - 1);
                 network_perturb_weights(tmp, ll);
+            }
+            else if (xg->lesion_type == 2) {
+                ll = 100.0 * i * MAX_ABLATE / (double) (MAX_POINTS - 1);
+                network_ablate_units(tmp, ll);
+            }
+            else if (xg->lesion_type == 3) {
+                ll = 1.0 - (i * MAX_SCALE / (double) (MAX_POINTS - 1));
+                network_scale_weights(tmp, ll);
             }
 
             switch (graph_id) {
@@ -572,7 +594,7 @@ static void print_graph_callback(GtkWidget *button, XGlobals *xg)
 
     if (xg != NULL) {
         prefix1 = g_object_get_data(G_OBJECT(xg->frame), "dump file prefix");
-        prefix2 = (xg->lesion_type == 0) ? "zero" : "noise";
+        prefix2 = dump_file_prefix[xg->lesion_type];
     }
 
     if ((prefix1 == NULL) || (prefix2 == NULL)) {
@@ -708,6 +730,8 @@ void lesion_viewer_create_widgets(GtkWidget *vbox, XGlobals *xg)
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Disconnection");
     gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Noise");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Ablation");
+    gtk_combo_box_append_text(GTK_COMBO_BOX(tmp), "Scaling");
     g_signal_connect(G_OBJECT(tmp), "changed", GTK_SIGNAL_FUNC(callback_select_lesion_type), xg);
     gtk_combo_box_set_active(GTK_COMBO_BOX(tmp), xg->lesion_type);
     gtk_widget_show(tmp);

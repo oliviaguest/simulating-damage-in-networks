@@ -85,6 +85,8 @@ extern void network_perturb_weights_ih(Network *net, double noise_sd);
 extern void network_perturb_weights_hh(Network *net, double noise_sd);
 extern void network_perturb_weights_ho(Network *net, double noise_sd);
 extern void network_perturb_weights(Network *net, double noise_sd);
+extern void network_ablate_units(Network *net, double severity);
+extern void network_scale_weights(Network *net, double scale);
 extern double network_test(Network *n, PatternList *test_patterns, ErrorFunction ef);
 extern Boolean network_train(Network *n, NetworkParameters *pars, PatternList *test_patterns);
 extern void network_train_to_criterion(Network *n, NetworkParameters *pars, PatternList *seqs);

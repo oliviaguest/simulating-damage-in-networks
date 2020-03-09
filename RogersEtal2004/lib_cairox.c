@@ -244,7 +244,7 @@ void cairox_paint_line(cairo_t *cr, CairoxLineParameters *params, double x1, dou
             double dashes[2] = {6, 6};
             cairo_set_dash(cr, dashes, 2, 0);
         }
-        else {
+        else if (params->line_style == LS_SOLID) {
             cairo_set_dash(cr, NULL, 0, 0);
         }
         if (!params->antialias) {
@@ -252,9 +252,11 @@ void cairox_paint_line(cairo_t *cr, CairoxLineParameters *params, double x1, dou
         }
     }
 
-    cairo_move_to(cr, x1, y1);
-    cairo_line_to(cr, x2, y2);
-    cairo_stroke(cr);
+    if ((params == NULL) || (params->line_style != LS_NONE)) {
+        cairo_move_to(cr, x1, y1);
+        cairo_line_to(cr, x2, y2);
+        cairo_stroke(cr);
+    }
 
     if (params != NULL) {
         cairo_set_dash(cr, NULL, 0, 0);

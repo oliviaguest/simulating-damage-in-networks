@@ -268,7 +268,7 @@ static void hub_pattern_viewer_repaint_norms(cairo_t *cr, PangoLayout *layout, X
 
         g_snprintf(buffer, 128, "%s Length", metric_name[hub_pattern_metric]);
         graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, gr_min, gr_max, 6, "%3.1f", buffer);
-        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 25, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 1.0, 25, LS_SOLID, MARK_NONE);
         gd->dataset[0].points = CAT_MAX;
         font_properties_set_size(fp, 14);
         graph_set_legend_properties(gd, FALSE, 0.0, 0.0, NULL);
@@ -351,7 +351,7 @@ static void hub_pattern_viewer_repaint_norms(cairo_t *cr, PangoLayout *layout, X
         graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 3.0, 8.0, 6, "%3.1f", buffer);
 #endif
 
-        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 25, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 1.0, 25, LS_SOLID, MARK_NONE);
         gd->dataset[0].points = CAT_MAX;
         font_properties_set_size(fp, 14);
         graph_set_legend_properties(gd, FALSE, 0.0, 0.0, NULL);
@@ -378,7 +378,7 @@ static void hub_pattern_viewer_repaint_norms(cairo_t *cr, PangoLayout *layout, X
         graph_set_axis_tick_marks(gd, GTK_ORIENTATION_HORIZONTAL, 5, dom_labels);
         g_snprintf(buffer, 128, "%s Length", metric_name[hub_pattern_metric]);
         graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, gr_min, gr_max, 6, "%3.1f", buffer);
-        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 50, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 1.0, 50, LS_SOLID, MARK_NONE);
         gd->dataset[0].points = 2;
 
         for (i = 0; i < 2; i++) {
@@ -401,7 +401,7 @@ static void hub_pattern_viewer_repaint_norms(cairo_t *cr, PangoLayout *layout, X
         g_snprintf(buffer, 128, "%s distance", metric_name[hub_pattern_metric]);
         graph_set_axis_properties(gd, GTK_ORIENTATION_VERTICAL, 3.0, 8.0, 6, "%3.1f", buffer);
 #endif
-        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 50, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(gd, 0, NULL, 0.5, 0.5, 0.5, 1.0, 50, LS_SOLID, MARK_NONE);
         gd->dataset[0].points = 2;
 
         for (i = 0; i < 2; i++) {
@@ -901,7 +901,7 @@ static void xhub_patterns_print_callback(GtkWidget *caller, XGlobals *xg)
     g_snprintf(prefix, 64, "%s_%s", xg->pattern_set_name, print_file_prefix[hub_pattern_mode]);
 
     /* PDF version: */
-    g_snprintf(filename, 128, "FIGURES/%s.pdf", prefix);
+    g_snprintf(filename, 128, "%s/%s.pdf", PRINT_FOLDER, prefix);
     surface = cairo_pdf_surface_create(filename, width, height);
     cr = cairo_create(surface);
     layout = pango_cairo_create_layout(cr);
@@ -924,7 +924,7 @@ static void xhub_patterns_print_callback(GtkWidget *caller, XGlobals *xg)
     cairo_destroy(cr);
 
     /* Save the PNG while we're at it: */
-    g_snprintf(filename, 128, "FIGURES/%s.png", prefix);
+    g_snprintf(filename, 128, "%s/%s.png", PRINT_FOLDER, prefix);
     cairo_surface_write_to_png(surface, filename);
     /* And destroy the surface */
     cairo_surface_destroy(surface);

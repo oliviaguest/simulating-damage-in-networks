@@ -2,7 +2,10 @@
 This is an implementation of the Botvinick and Plaut (2004) SRN model of routine
 action selection and its disorders.
 
-Botvinick, M., & Plaut, D. C. (2004). Doing Without Schema Hierarchies: A Recurrent Connectionist Approach to Normal and Impaired Routine Sequential Action. *Psychological Review*, 111(2), 395–429. https://doi.org/10.1037/0033-295X.111.2.395
+> Botvinick, M., & Plaut, D. C. (2004). Doing Without Schema Hierarchies: A
+> Recurrent Connectionist Approach to Normal and Impaired Routine Sequential
+> Action. *Psychological Review*, 111(2), 395–429.
+> https://doi.org/10.1037/0033-295X.111.2.395
 
 
 ## Installation
@@ -33,4 +36,4 @@ these analyses takes the currently trained network and explores its behaviour
 according to one of the analyses from the original (i.e., 2004) publication, or
 with alternative forms of damage.
 
-![After training](./img/bp2.png)
+![Explore behaviour](./img/bp2.png)
