@@ -2,8 +2,7 @@
 
 This is the codebase to go with the article:
 
-Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in Connectionist Networks. *Computational Brain & Behaviour*.
-
+Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in Connectionist Networks. 
 
 ## Requirements
 You need to have a C compiler ([gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection)) installed. This comes installed by default on Linux. On Mac you need to install [Xcode](https://apps.apple.com/in/app/xcode/id497799835). On Windows you probably need [Cygwin](https://www.cygwin.com/) — although this has not been tested.
