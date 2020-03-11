@@ -1,8 +1,11 @@
 # On Simulating Neural Damage in Connectionist Networks
 
-This is the codebase to go with the article:
+## Citation
 
-Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in
+Please cite the journal article that goes with this code, if you use any part of
+this in your work:
+
+> Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in
 Connectionist Networks.
 
 ## Requirements
