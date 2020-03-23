@@ -1,5 +1,5 @@
 #include "xframe.h"
-#include "lib_cairox.h"
+#include "lib_cairox_2_0.h"
 
 static GtkWidget *world_state_viewer_widget = NULL;
 static cairo_surface_t *world_state_viewer_surface = NULL;

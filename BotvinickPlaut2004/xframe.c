@@ -30,18 +30,18 @@ extern void create_bp_errors_per_trial_viewer(GtkWidget *vbox);
 extern GtkWidget *create_jb_analysis_page();
 
 XGlobals xg =   {NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        0,
-                        0,
-                        {},
-                        {},
-                        FALSE,
-                        FALSE};
+                 NULL,
+                 NULL,
+                 NULL,
+                 NULL,
+                 NULL,
+                 NULL,
+                 0,
+                 0,
+                 {},
+                 {},
+                 FALSE,
+                 TRUE}; // Colour - on by default
 
 Parameters pars = {0.001,            /* Default learning rate      */
                    CROSS_ENTROPY,    /* Default error function     */
@@ -480,7 +480,7 @@ static void populate_parameters_page(GtkWidget *page)
 
     hbox = gtk_hbox_new(FALSE, 0);
     /*--- The label: ---*/
-    tmp = gtk_label_new("Miscellaneous parameters:");
+    tmp = gtk_label_new("Configuration of the initial state:");
     gtk_box_pack_start(GTK_BOX(hbox), tmp, FALSE, FALSE, 5);
     gtk_widget_show(tmp);
     gtk_box_pack_start(GTK_BOX(page), hbox, FALSE, FALSE, 5);

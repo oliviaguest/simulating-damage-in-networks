@@ -1,6 +1,6 @@
 
 #include "xframe.h"
-#include "lib_cairox.h"
+#include "lib_cairox_2_0.h"
 #include "xcs_sequences.h"
 
 extern void initialise_state(TaskType *task);
@@ -15,6 +15,44 @@ static cairo_surface_t *viewer_surface = NULL;
 
 /* The results matrix has 4 dimensions: instruction, weights, sequence */
 static int cs_sim2_results[3][10][NUM_VARIANTS];
+
+/******************************************************************************/
+
+
+Boolean sim2_load_weights_from_disk(int net_count)
+{
+    char file[64], buffer[128];
+    FILE *fp;
+    Boolean success;
+    int j;
+
+    /* Set this by hand for each weight set: */
+
+    g_snprintf(file, 64, "Weights/srn_20000_%02d.wgt", net_count+1);
+
+    if ((fp = fopen(file, "r")) == NULL) {
+        g_snprintf(buffer, 128, "ERROR: Cannot read %s ... weights not restored", file);
+        success = FALSE;
+    }
+    else if ((j = network_restore_weights(fp, xg.net)) > 0) {
+        g_snprintf(buffer, 128, "ERROR: Weight file format error %d ... weights not restored", j);
+        fclose(fp);
+        success = FALSE;
+    }
+    else {
+        gtk_label_set_text(GTK_LABEL(xg.weight_history_label), file);
+        g_snprintf(buffer, 128, "Weights successfully restored from %s", file);
+
+        /* Initialise the graph and various viewers: */
+        //        xgraph_set_error_scores();
+        //        initialise_widgets();
+
+        fclose(fp);
+        success = TRUE;
+    }
+    fprintf(stdout, "%s\n", buffer);
+    return(success);
+}
 
 /******************************************************************************/
 

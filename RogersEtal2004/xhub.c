@@ -15,6 +15,7 @@
 *******************************************************************************/
 /******** Include files: ******************************************************/
 
+#include <locale.h>
 #include "xhub.h"
 
 /******** Declared initialised variables: *************************************/
@@ -52,9 +53,12 @@ int main(int argc, char **argv)
 {
     long t0 = (long) time(NULL);
 
-    gtk_set_locale();
+    // Initialise GTK+
     gtk_init(&argc, &argv);
+    // Initialise the random seed [Comment this out if you want exact replications]
     srand((int) t0);
+    // Set (override?) the locale so that we can read and write doubles using '.' as the decimal separator
+    setlocale(LC_NUMERIC, "C");
 
     /* Create the network ... */
     xg.net = network_create(NT_RECURRENT, NUM_IO, NUM_SEMANTIC, NUM_IO);

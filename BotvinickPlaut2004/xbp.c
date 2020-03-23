@@ -15,7 +15,6 @@ int main(int argc, char **argv)
     long t0 = (long) time(NULL);
     GtkWidget *frame;
 
-    gtk_set_locale();
     gtk_init(&argc, &argv);
     srand((int) t0);
 

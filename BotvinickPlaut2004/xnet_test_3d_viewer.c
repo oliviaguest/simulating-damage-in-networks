@@ -1,6 +1,6 @@
 #include "xframe.h"
 
-#include "lib_cairox.h"
+#include "lib_cairox_2_0.h"
 
 static GtkWidget *net_3d_viewer_widget = NULL;
 static cairo_surface_t *net_3d_viewer_surface = NULL;

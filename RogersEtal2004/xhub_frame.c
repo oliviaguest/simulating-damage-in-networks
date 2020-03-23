@@ -279,12 +279,12 @@ Boolean weight_file_read(XGlobals *xg, char *filename)
     }
     else {
         fclose(fp);
+        fprintf(stdout, "Weights successfully restored from %s\n", filename);
         network_parameters_set(new_net, &(xg->net->params));
         network_destroy(xg->net);
         xg->net = new_net;
         gtk_label_set_text(GTK_LABEL(xg->label_weight_history), filename);
         hub_explore_initialise_network(xg);
-        fprintf(stdout, "Weights successfully restored from %s\n", filename);
 	fprintf(stdout, "  Weight range: [%7.5f - %7.5f];", network_weight_minimum(new_net), network_weight_maximum(new_net));
 	fprintf(stdout, " Error: %7.5f (Max. Bit); %7.5f (RMS)\n", network_test_max_bit(new_net, xg->pattern_set), sqrt(network_test(new_net, xg->pattern_set, EF_SUM_SQUARE)));
         fflush(stdout);

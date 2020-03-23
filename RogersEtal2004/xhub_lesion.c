@@ -699,8 +699,8 @@ static void reset_graph_data()
         else if (damage_graph_damage_type == LESION_SCALE_WEIGHTS) {
             graph_set_axis_properties(damage_graph_data, GTK_ORIENTATION_HORIZONTAL, 0, 2, 0, NULL, "Weight\nScaling");
         }
-        graph_set_dataset_properties(damage_graph_data, 0, "Animals", 0.0, 0.0, 0.0, 1.0, 30, LS_SOLID, MARK_NONE);
-        graph_set_dataset_properties(damage_graph_data, 1, "Artefacts", 1.0, 1.0, 1.0, 1.0, 30, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(damage_graph_data, 0, "Animals", 1.0, 0.0, 0.0, 1.0, 30, LS_SOLID, MARK_NONE);
+        graph_set_dataset_properties(damage_graph_data, 1, "Artefacts", 0.0, 0.0, 1.0, 1.0, 30, LS_SOLID, MARK_NONE);
         if (damage_graph_damage_type == LESION_SEVER_WEIGHTS) {
             damage_graph_data->dataset[0].points = 1; 
             damage_graph_data->dataset[0].x[0] = 1; 

@@ -486,10 +486,12 @@ static void cairoxg_draw_dataset(cairo_t *cr, PangoLayout *layout, GraphStruct *
             cairo_stroke(cr);
 
 
-            // This shows the actual value within the bar - perhaps inappropraite?
-            g_snprintf(buffer, 64, "%6.3f", gd->dataset[l].y[i]);
-            cairox_text_parameters_set(&tp, x+x_offset+gd->dataset[l].bar_width*0.5, y0-5, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_CENTER, 90.0);
-            cairox_paint_pango_text(cr, &tp, layout, buffer);
+            if (FALSE) {
+                // This shows the actual value within the bar - perhaps inappropraite?
+                g_snprintf(buffer, 64, "%6.3f", gd->dataset[l].y[i]);
+                cairox_text_parameters_set(&tp, x+x_offset+gd->dataset[l].bar_width*0.5, y0-5, PANGOX_XALIGN_LEFT, PANGOX_YALIGN_CENTER, 90.0);
+                cairox_paint_pango_text(cr, &tp, layout, buffer);
+            }
         }
     }
     else if (gd->dataset[l].style != LS_NONE) { /* Show the data as a line: */

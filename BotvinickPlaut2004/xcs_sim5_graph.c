@@ -1,6 +1,6 @@
 
 #include "xframe.h"
-#include "lib_cairox.h"
+#include "lib_cairox_2_0.h"
 #include "xcs_sequences.h"
 
 extern void initialise_state(TaskType *task);

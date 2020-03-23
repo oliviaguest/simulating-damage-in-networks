@@ -1,19 +1,20 @@
 
 #include "xframe.h"
 #include "lib_string.h"
-#include "lib_cairox.h"
-#include "lib_cairoxg_2_4.h"
+#include "lib_cairox_2_0.h"
+#include "lib_cairoxg_2_5.h"
 #include "xcs_sequences.h"
 
 #define ERROR_CATEGORIES  4
 #define MAX_LEVELS 11
 #define MAX_STEPS 100
+#define MAX_NETS 12
 
 static GtkWidget *viewer_widget = NULL;
 static cairo_surface_t *viewer_surface = NULL;
 
 static TaskType sc_task = {TASK_COFFEE, DAMAGE_ACTIVATION_NOISE, {FALSE, FALSE, FALSE, FALSE, FALSE}};
-static double sc_data[TASK_MAX][MAX_LEVELS][ERROR_CATEGORIES];
+static double sc_data[MAX_NETS][TASK_MAX][MAX_LEVELS][ERROR_CATEGORIES];
 static int sc_count = 0;
 
 typedef struct damage_details {
@@ -35,11 +36,14 @@ static DamageDetails sc_dd[7] = {
 
 extern void analyse_actions_with_acs1(TaskType *task, ACS1 *results);
 
+// Defined in xcs_sim2.c
+extern Boolean sim2_load_weights_from_disk(int net_count);
+
 static GraphStruct *independents_chart;
 
 /******************************************************************************/
 
-static void sc_run_and_score_activation_noise(Network *net, TaskType *task, int i)
+static void sc_run_and_score_activation_noise(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -69,15 +73,15 @@ static void sc_run_and_score_activation_noise(Network *net, TaskType *task, int 
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_ch_weight_noise(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_noise(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -107,15 +111,15 @@ static void sc_run_and_score_ch_weight_noise(Network *net, TaskType *task, int i
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_ch_weight_lesion(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ch_weight_lesion(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -145,15 +149,15 @@ static void sc_run_and_score_ch_weight_lesion(Network *net, TaskType *task, int 
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_ih_weight_noise(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ih_weight_noise(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -183,15 +187,15 @@ static void sc_run_and_score_ih_weight_noise(Network *net, TaskType *task, int i
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int i)
+static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -221,15 +225,15 @@ static void sc_run_and_score_ih_weight_lesion(Network *net, TaskType *task, int 
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_context_ablate(Network *net, TaskType *task, int i)
+static void sc_run_and_score_context_ablate(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -259,15 +263,15 @@ static void sc_run_and_score_context_ablate(Network *net, TaskType *task, int i)
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
-static void sc_run_and_score_weight_scale(Network *net, TaskType *task, int i)
+static void sc_run_and_score_weight_scale(Network *net, TaskType *task, int i, int nc)
 {
     double     *vector_in;
     double     *vector_out;
@@ -297,16 +301,33 @@ static void sc_run_and_score_weight_scale(Network *net, TaskType *task, int i)
 
     analyse_actions_with_acs1(task, &results);
 
-    sc_data[task->base][i][0] += results.actions;
+    sc_data[nc][task->base][i][0] += results.actions;
     if (results.actions > 0) {
-        sc_data[task->base][i][1] += results.independents / ((double) results.actions);
-        sc_data[task->base][i][2] += results.errors_crux / ((double) results.actions);
-        sc_data[task->base][i][3] += results.errors_non_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][1] += results.independents / ((double) results.actions);
+        sc_data[nc][task->base][i][2] += results.errors_crux / ((double) results.actions);
+        sc_data[nc][task->base][i][3] += results.errors_non_crux / ((double) results.actions);
     }
 }
 
 
 /*****************************************************************************/
+
+static void independents_stats(BaseTaskType task, int i, int j, double *mean, double *sd)
+{
+    double sum = 0.0, ssq = 0.0;
+    int n;
+
+    // Calculate stats over MAX_NETS networks
+
+    for (n = 0; n < MAX_NETS; n++) {
+        sum += sc_data[n][task][i][j];
+        ssq += (sc_data[n][task][i][j]*sc_data[n][task][i][j]);
+    }
+
+    *mean = sum / (double) MAX_NETS;
+    *sd = sqrt((ssq/(double) MAX_NETS) - (sum/(double) MAX_NETS)*(sum/(double) MAX_NETS));
+}
+
 
 static void independents_chart_write_to_cairo(cairo_t *cr, int width, int height)
 {
@@ -331,10 +352,10 @@ static void independents_chart_write_to_cairo(cairo_t *cr, int width, int height
     graph_set_axis_tick_marks(independents_chart, GTK_ORIENTATION_HORIZONTAL, (2*sc_dd[sc_task.damage-1].num_levels)+1, labels);
 
     if (sc_count == 1) {
-        g_snprintf(buffer, 128, "Proportion of independents/errors for %d trial", sc_count);
+        g_snprintf(buffer, 128, "Proportion of independents/errors [%d networks; %d trial per network]", MAX_NETS, sc_count);
     }
     else {
-        g_snprintf(buffer, 128, "Proportion of independents/errors for %d trials", sc_count);
+        g_snprintf(buffer, 128, "Proportion of independents/errors [%d networks; %d trials per network]", MAX_NETS, sc_count);
     }
     graph_set_title(independents_chart, buffer);
 
@@ -348,14 +369,25 @@ static void independents_chart_write_to_cairo(cairo_t *cr, int width, int height
             independents_chart->dataset[2*j+1].x[i] = 0.5 + i;
             if ((sc_count == 0) || (sc_task.base == TASK_NONE)) { 
                 independents_chart->dataset[2*j].y[i] = 0.0;
+                independents_chart->dataset[2*j].dy1[i] = 0.0;
+                independents_chart->dataset[2*j].dy2[i] = 0.0;
                 independents_chart->dataset[2*j+1].y[i] = 0.0;
+                independents_chart->dataset[2*j+1].dy1[i] = 0.0;
+                independents_chart->dataset[2*j+1].dy2[i] = 0.0;
             }
             else {
-                independents_chart->dataset[2*j].y[i] = sc_data[TASK_COFFEE][i][j] / (double) sc_count;
-                independents_chart->dataset[2*j+1].y[i] = sc_data[TASK_TEA][i][j] / (double) sc_count;
+                double mean, sd;
+
+                independents_stats(TASK_COFFEE, i, j, &mean, &sd);
+                independents_chart->dataset[2*j].y[i] = mean / (double) sc_count;
+                independents_chart->dataset[2*j].dy1[i] = sd / (double) sc_count;
+                independents_chart->dataset[2*j].dy2[i] = sd / (double) sc_count;
+
+                independents_stats(TASK_TEA, i, j, &mean, &sd);
+                independents_chart->dataset[2*j+1].y[i] = mean / (double) sc_count;
+                independents_chart->dataset[2*j+1].dy1[i] = sd / (double) sc_count;
+                independents_chart->dataset[2*j+1].dy2[i] = sd / (double) sc_count;
             }
-            independents_chart->dataset[2*j].se[i] = 0.0;
-            independents_chart->dataset[2*j+1].se[i] = 0.0;
         }
         if ((sc_count == 0) || (sc_task.base == TASK_NONE)) {
             independents_chart->dataset[2*j].points = 0;
@@ -405,13 +437,15 @@ static Boolean independents_chart_expose(GtkWidget *widget, GdkEvent *event, voi
 
 static void initialise_sc_data()
 {
-    int i, j, t;
+    int i, j, t, n;
 
     sc_count = 0;
     for (t = 0; t < TASK_MAX; t++) {
         for (i = 0; i < MAX_LEVELS; i++) {
             for (j = 0; j < ERROR_CATEGORIES; j++) {
-                sc_data[t][i][j] = 0.0;
+                for (n = 0; n < MAX_NETS; n++) {
+                    sc_data[n][t][i][j] = 0.0;
+                }
             }
         }
     }
@@ -471,161 +505,174 @@ static void set_damage_callback(GtkWidget *cb, void *dummy)
 
 static void independents_chart_step_callback(GtkWidget *mi, void *count)
 {
-    int j = (long) count;
-    int i;
+    Network *saved_net;
+    int i, j, net_count;
+
+    // Save existing network so it can be restored once we're done:
+    saved_net = network_copy(xg.net);
 
     sc_task.initial_state.bowl_closed = pars.sugar_closed;
     sc_task.initial_state.mug_contains_coffee = pars.mug_with_coffee; 
     sc_task.initial_state.mug_contains_tea = pars.mug_with_tea;
     sc_task.initial_state.mug_contains_cream = pars.mug_with_cream;
     sc_task.initial_state.mug_contains_sugar = pars.mug_with_sugar; 
+
+    j = (long) count;
     while (j-- > 0) {
-        if (sc_task.damage == DAMAGE_ACTIVATION_NOISE) {
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    sc_run_and_score_activation_noise(xg.net, &sc_task, i);
-                    sc_task.base = TASK_TEA;
-                    sc_run_and_score_activation_noise(xg.net, &sc_task, i);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    sc_run_and_score_activation_noise(xg.net, &sc_task, i);
-                }
-            }
-        }
-        else if (sc_task.damage == DAMAGE_CH_WEIGHT_NOISE) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
+        net_count = 0;
+        while ((net_count < MAX_NETS) && (sim2_load_weights_from_disk(net_count))) {
+
+            if (sc_task.damage == DAMAGE_ACTIVATION_NOISE) {
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i, net_count);
+                        sc_task.base = TASK_TEA;
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i, net_count);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        sc_run_and_score_activation_noise(xg.net, &sc_task, i, net_count);
+                    }
                 }
             }
-	}
-        else if (sc_task.damage == DAMAGE_CH_WEIGHT_LESION) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                }
-            }
-	}
-        else if (sc_task.damage == DAMAGE_IH_WEIGHT_NOISE) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
+            else if (sc_task.damage == DAMAGE_CH_WEIGHT_NOISE) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
                 }
             }
-	}
-        else if (sc_task.damage == DAMAGE_IH_WEIGHT_LESION) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                }
-            }
-	}
-        else if (sc_task.damage == DAMAGE_CONTEXT_ABLATE) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_context_ablate(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
+            else if (sc_task.damage == DAMAGE_CH_WEIGHT_LESION) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ch_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
                 }
             }
-        }
-        else if (sc_task.damage == DAMAGE_WEIGHT_SCALE) {
-            Network *tmp_net;
-            for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
-                if (sc_task.base == TASK_MAX) {
-                    sc_task.base = TASK_COFFEE;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_TEA;
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
-                    sc_task.base = TASK_MAX;
-                }
-                else if (sc_task.base != TASK_NONE) {
-                    tmp_net = network_copy(xg.net);
-                    sc_run_and_score_weight_scale(tmp_net, &sc_task, i);
-                    network_tell_destroy(tmp_net);
+            else if (sc_task.damage == DAMAGE_IH_WEIGHT_NOISE) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_noise(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
                 }
             }
-        }
-        else {
-            fprintf(stdout, "WARNING: Damage type %d not implemented\n", sc_task.damage);
+            else if (sc_task.damage == DAMAGE_IH_WEIGHT_LESION) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_ih_weight_lesion(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            else if (sc_task.damage == DAMAGE_CONTEXT_ABLATE) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_context_ablate(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            else if (sc_task.damage == DAMAGE_WEIGHT_SCALE) {
+                Network *tmp_net;
+                for (i = 0; i < sc_dd[sc_task.damage-1].num_levels; i++) {
+                    if (sc_task.base == TASK_MAX) {
+                        sc_task.base = TASK_COFFEE;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scale(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_TEA;
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scale(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                        sc_task.base = TASK_MAX;
+                    }
+                    else if (sc_task.base != TASK_NONE) {
+                        tmp_net = network_copy(xg.net);
+                        sc_run_and_score_weight_scale(tmp_net, &sc_task, i, net_count);
+                        network_tell_destroy(tmp_net);
+                    }
+                }
+            }
+            else {
+                fprintf(stdout, "WARNING: Damage type %d not implemented\n", sc_task.damage);
+            }
+            net_count++;
         }
         sc_count++;
-        independents_chart_expose(NULL, NULL, NULL);
+        gtk_widget_queue_draw(viewer_widget);
     }
+    // Restore the saved network
+    network_tell_destroy(xg.net);
+    xg.net = saved_net;
 }
 
 static void viewer_widget_snap_callback(GtkWidget *button, void *dummy)

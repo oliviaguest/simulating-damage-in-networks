@@ -235,6 +235,7 @@ PatternList *hub_pattern_set_read(char *filename)
                 p = q;
             }
         }
+        fclose(fp); // Added by RPC on 18/03/20 to correct an oversight!
     }
     return(list);
 }
