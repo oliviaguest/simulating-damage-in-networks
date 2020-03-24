@@ -1,14 +1,16 @@
 # Rogers et al. (2004)
 
 This folder contains code for exploring the effects of damage on the hub and
-spoke model.
-
+spoke model:
 > Rogers, T. T., Lambon Ralph, M. A., Garrard, P., Bozeat, S., McClelland, J.
 > L., Hodges, J. R., & Patterson, K. (2004). Structure and deterioration of
 > semantic memory: a neuropsychological and computational investigation.
 > *Psychological review*, 111(1), 205.
 > https://doi.org/10.1037/0033-295X.111.1.205
 
+Please refer to our article (especially the Supplementary Material) for more information:
+> Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in
+Connectionist Networks.
 
 The original intention was that model could either learn weights for
 the network or load them from a file. However (and as of March, 2017),
