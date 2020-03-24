@@ -3,7 +3,7 @@
 ## Citation
 
 Please cite the journal article that goes with this code, if you use any part of
-this in your work:
+this in your own work:
 
 > Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in
 Connectionist Networks.
