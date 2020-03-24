@@ -1,16 +1,17 @@
 # Tyler et al. (2000)
 This code is an implementation of the Tyler et al. (2000) model of the
 organisation of semantic memory. The critical feature (for Tyler et al.) is the
-correlational structure of features in the different domains.
-
+correlational structure of features in the different domains:
 > Tyler, L. K., Moss, H. E., Durrant-Peatfield, M. R., & Levy, J. P. (2000).
 > Conceptual structure and the structure of concepts: A distributed account of
 > category-specific deficits. *Brain and language*, 75(2), 195-231.
 > https://doi.org/10.1006/brln.2000.2353
 
+Please refer to our article (especially the Supplementary Material) for more information:
+> Guest, O., Caso A. & Cooper, R. P. (2020). On Simulating Neural Damage in
+Connectionist Networks.
 
 The code provides a faithful reimplementation of the original model (a simple feedforward autoassociator) as well as a recurrent implementation (in which the hidden layer is augmented with recurrent connections). Both models show the same sensitivity to the structure of the patterns.
-
 
 ## To run
 To run the model it first needs to be compiled (once) using [gcc](https://gcc.gnu.org):
@@ -29,12 +30,10 @@ To generate the graphs used in the paper, switch to the "Tyler Graphs" tab and c
 
 ![Button highlighted in GUI](./img/t0.png)
 
-
 On the "Lesion Results" page, when "Regenerate" is off the current state of the
 network is used to generate results, rather than training to criterion each
 time. If the current state has not been trained, and "Regenerate" is off, you'll
 end up with very high absolute errors — and possible apparently blank graphs.
-
 
 **Note 1**: The recurrent network is trained with BPTT in one of two
 modes. If compiled with the CLAMPED flag #defined, then the input is
